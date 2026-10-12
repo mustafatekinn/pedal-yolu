@@ -1,0 +1,1812 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10141f">
+<title>Pedal Yolu 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Teko:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed road canvas; HUD pinned to the corners like a bike computer; menus are dusk-tinted glass over the moving road */
+:root {
+  --dusk: #10141f;
+  --panel: rgba(15, 19, 30, .74);
+  --panel-solid: #161b28;
+  --line: rgba(243, 234, 216, .14);
+  --ink: #f3ead8;
+  --muted: #a9aebb;
+  --apricot: #ffb35c;
+  --teal: #4fd3c0;
+  --rose: #ff7a6b;
+  --f-num: "Teko", "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --f-ui: "Barlow Semi Condensed", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { height: 100%; margin: 0 }
+body { background: var(--dusk); color: var(--ink); font: 500 17px/1.4 var(--f-ui); overflow: hidden; -webkit-font-smoothing: antialiased }
+body.is-sensor { overflow: auto; background: #07090e }
+[hidden] { display: none !important }
+button { font: inherit; color: inherit; cursor: pointer }
+:focus-visible { outline: 2px solid var(--apricot); outline-offset: 3px }
+kbd { font: 600 .85em var(--f-ui); padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,.06) }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block }
+.screen { position: fixed; inset: 0; overflow: auto }
+.num { font-family: var(--f-num); font-weight: 500; line-height: .82; font-variant-numeric: tabular-nums }
+.lbl { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px) }
+.btn { border: 1px solid var(--line); background: rgba(255,255,255,.06); border-radius: 999px; padding: 10px 20px; font-weight: 700; display: inline-flex; gap: 10px; align-items: center }
+.btn:hover { border-color: rgba(255,179,92,.6) }
+.btn.primary { background: var(--apricot); color: #1c1408; border-color: transparent }
+.btn.primary kbd { border-color: rgba(28,20,8,.25); background: rgba(28,20,8,.08) }
+.btn.ghost { background: none }
+
+/* ---- lobby ---- */
+#lobby { display: flex; flex-direction: column; background: linear-gradient(90deg, rgba(11,14,22,.94) 0%, rgba(11,14,22,.8) 48%, rgba(11,14,22,.4) 100%); padding: 32px 16px 20px }
+.lobby-in { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .9fr); gap: 48px; align-items: center; padding-inline: clamp(0px, 3vw, 32px) }
+.eyebrow { margin: 0; color: var(--apricot); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; font-size: 14px }
+h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: uppercase; margin: 18px 0 10px; letter-spacing: .01em; text-wrap: balance }
+.lede { margin: 0; max-width: 34em; color: #d9d2c3; font-size: 19px }
+.modes { display: grid; gap: 10px; margin-top: 28px; max-width: 560px }
+.mode { display: grid; grid-template-columns: 46px minmax(0, 1fr); column-gap: 16px; align-items: center; text-align: left; padding: 13px 18px; border-radius: 14px; border: 1px solid var(--line); background: rgba(16,20,31,.6); transition: border-color .15s, background .15s }
+.mode:hover, .mode.sel { border-color: rgba(255,179,92,.7); background: rgba(255,179,92,.07) }
+.m-key { grid-row: 1 / 3; font: 500 38px/1 var(--f-num); color: var(--apricot); text-align: center; border-right: 1px solid var(--line); padding-top: 4px }
+.m-name { font-weight: 700; font-size: 22px; line-height: 1.15 }
+.m-desc { color: var(--muted); font-size: 15px }
+.diff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 18px }
+.diff .lbl { margin-right: 6px }
+.diff button { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 5px 14px; font-weight: 600; color: var(--muted) }
+.diff button[aria-checked="true"] { color: #1c1408; background: var(--ink); border-color: var(--ink) }
+.hint { color: var(--muted); font-size: 15px; margin: 18px 0 0; max-width: 34em }
+.pair { padding: 24px }
+.pair h2 { margin: 0 0 16px; font: 600 40px/.9 var(--f-num); text-transform: uppercase; letter-spacing: .02em }
+.pair-row { display: grid; grid-template-columns: 156px minmax(0, 1fr); gap: 20px; align-items: start }
+.qr { background: #fff; border-radius: 12px; padding: 10px; width: 156px; aspect-ratio: 1; max-width: 100% }
+.qr svg { display: block; width: 100%; height: 100% }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: #ddd6c8; font-size: 16px }
+.steps b { color: var(--ink) }
+.pair-code { display: flex; align-items: baseline; gap: 12px; margin-top: 18px }
+.pair-code .num { font-size: 52px; letter-spacing: .12em; color: var(--apricot) }
+.link { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; font-size: 15px; margin-left: auto }
+.pair-url { margin: 4px 0 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere }
+.pair-status { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-weight: 600 }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none }
+.dot[data-s="phone"] { background: var(--teal); box-shadow: 0 0 0 4px rgba(79,211,192,.18) }
+.dot[data-s="offline"], .dot[data-s="nolib"] { background: var(--rose) }
+.live { margin-left: auto; color: var(--muted) }
+.live .num { font-size: 30px; color: var(--ink) }
+.warn-note { margin: 12px 0 0; color: var(--rose); font-size: 15px }
+.diag { margin: 10px 0 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums }
+.journey { width: 100%; max-width: 1180px; margin: 28px auto 0; padding-inline: clamp(0px, 3vw, 32px) }
+.j-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font-weight: 600 }
+.j-track { position: relative; height: 6px; border-radius: 3px; background: rgba(243,234,216,.13); margin: 34px 0 30px }
+.j-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 3px; background: var(--apricot) }
+.j-stop { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 2px; height: 14px; background: rgba(243,234,216,.4) }
+.j-stop.on { background: var(--apricot) }
+.j-stop em { position: absolute; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 13px; color: var(--muted); white-space: nowrap; top: 18px }
+.j-stop:nth-child(odd) em { top: auto; bottom: 18px }
+.j-stop.on em { color: var(--ink) }
+@media (max-width: 900px) {
+  .lobby-in { grid-template-columns: minmax(0, 1fr); gap: 28px }
+  #lobby { background: rgba(11,14,22,.9) }
+}
+@media (max-width: 560px) {
+  .pair-row { grid-template-columns: minmax(0, 1fr) }
+  .j-stop em { display: none }
+}
+
+/* ---- HUD ---- */
+#hud { position: fixed; inset: 0; pointer-events: none }
+.hb { position: absolute; padding: 12px 18px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px) }
+.tl { top: 16px; left: 16px }
+.tc { top: 16px; left: 50%; transform: translateX(-50%); text-align: center }
+.tr { top: 16px; right: 16px; text-align: right }
+.bl { bottom: 16px; left: 16px; display: grid; grid-template-columns: auto auto; align-items: end; gap: 4px 14px }
+.br { bottom: 16px; right: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0 }
+.xl { font-size: 104px }
+.lg { font-size: 64px }
+.md { font-size: 36px }
+.speed-row { display: flex; align-items: baseline; gap: 8px }
+.of { color: var(--muted); font-size: .55em }
+.gauge svg { width: 132px; height: 76px; display: block; grid-row: 1 / 3 }
+.g-track { fill: none; stroke: rgba(243,234,216,.14); stroke-width: 9; stroke-linecap: round }
+.g-zone { fill: none; stroke: rgba(79,211,192,.35); stroke-width: 9 }
+.g-val { fill: none; stroke: var(--teal); stroke-width: 9; stroke-linecap: round; transition: stroke .2s }
+.g-val[data-z="low"] { stroke: var(--muted) }
+.g-val[data-z="hot"] { stroke: var(--apricot) }
+.chip { padding: 6px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-weight: 700; font-size: 16px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px) }
+.chip[data-t="up"] { color: var(--apricot) }
+.chip[data-t="down"] { color: var(--teal) }
+.chip[data-t="phone"] { color: var(--teal) }
+.banner { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); padding: 8px 24px 4px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font: 500 40px/1 var(--f-num); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis }
+.banner[data-tone="good"] { color: var(--teal); border-color: rgba(79,211,192,.5) }
+.banner[data-tone="hot"] { color: var(--apricot); border-color: rgba(255,179,92,.5) }
+.banner[data-tone="warn"] { color: var(--rose); border-color: rgba(255,122,107,.45) }
+.banner.pop { animation: pop .35s ease-out }
+@keyframes pop { from { transform: translate(-50%, -8px); opacity: 0 } to { transform: translate(-50%, 0); opacity: 1 } }
+.sprint { position: absolute; top: 212px; left: 50%; transform: translateX(-50%); width: min(340px, calc(100vw - 32px)); text-align: center }
+.sprint-bar { height: 10px; border-radius: 5px; background: rgba(243,234,216,.15); overflow: hidden; margin-top: 6px }
+.sprint-bar i { display: block; height: 100%; width: 0; background: var(--apricot) }
+.sprint-lbl { font-weight: 700; text-shadow: 0 1px 6px rgba(0,0,0,.6) }
+.bigmsg { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); text-align: center; text-shadow: 0 4px 30px rgba(0,0,0,.45) }
+.bigmsg b { display: block; font: 600 clamp(64px, 11vw, 180px)/.8 var(--f-num); text-transform: uppercase; letter-spacing: .02em; white-space: nowrap }
+.bigmsg span { display: block; font-weight: 700; font-size: 20px; margin-top: 10px }
+@media (max-width: 760px) {
+  .xl { font-size: 72px } .lg { font-size: 46px } .md { font-size: 28px }
+  .banner { font-size: 28px; top: 120px }
+  .sprint { top: 168px }
+}
+@media (prefers-reduced-motion: reduce) { .banner.pop { animation: none } }
+
+/* ---- overlays ---- */
+.overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; background: rgba(8,10,16,.55); padding: 16px; overflow: auto }
+.overlay > .card { margin-block: auto }
+.res { width: min(760px, 100%); padding: 28px }
+.res h2, .pz h2 { margin: 6px 0 4px; font: 600 clamp(56px, 9vw, 88px)/.85 var(--f-num); text-transform: uppercase; text-wrap: balance }
+.note { margin: 0 0 18px; color: var(--apricot); font-weight: 700 }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 16px 20px; margin: 0 0 22px }
+.stats div { min-width: 0 }
+.stats dt { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+.stats dd { margin: 4px 0 0; font: 500 44px/.85 var(--f-num); font-variant-numeric: tabular-nums }
+.stats dd small { font: 600 15px var(--f-ui); color: var(--muted); margin-left: 4px }
+.board { list-style: none; margin: 0 0 22px; padding: 0; display: grid; gap: 2px; counter-reset: pos }
+.board li { counter-increment: pos; display: grid; grid-template-columns: 34px 14px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px }
+.board li::before { content: counter(pos); font: 500 26px/1 var(--f-num); color: var(--muted); padding-top: 3px }
+.board li.me { background: rgba(255,179,92,.12) }
+.board li.me::before { color: var(--apricot) }
+.board i { width: 12px; height: 12px; border-radius: 3px }
+.board span:last-child { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600 }
+.actions { display: flex; flex-wrap: wrap; gap: 10px }
+.pz { padding: 28px; width: min(440px, 100%) }
+.pz p { color: var(--muted); margin: 0 0 20px }
+
+/* ---- phone sensor ---- */
+.s-wrap { max-width: 460px; margin: 0 auto; padding: 28px 16px 40px; min-height: 100%; display: flex; flex-direction: column; gap: 22px }
+.s-head { display: flex; align-items: baseline; gap: 10px }
+.s-head b { font: 600 40px/.9 var(--f-num); text-transform: uppercase }
+.s-head span { color: var(--muted); font-weight: 600 }
+.s-panel { display: grid; gap: 16px }
+.s-panel label { font-weight: 700; font-size: 19px }
+.s-panel input { font: 500 54px/1 var(--f-num); letter-spacing: .14em; text-transform: uppercase; text-align: center; padding: 14px 10px 6px; border-radius: 14px; border: 1px solid var(--line); background: #10141f; color: var(--apricot); width: 100% }
+.big { justify-content: center; font-size: 22px; padding: 16px 20px }
+.s-code { margin: 0; color: var(--muted); font-weight: 600 }
+.s-code b { color: var(--apricot); font: 500 34px/1 var(--f-num); letter-spacing: .12em; margin-left: 6px }
+.s-err { margin: 0; color: var(--rose); font-weight: 600 }
+.s-run { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding-top: 6vh }
+.s-rpm { font-size: 180px; color: #d8d1c2 }
+.s-line { margin: 6px 0 0; font-weight: 600; max-width: 26em }
+.s-line.ok { color: var(--teal) }
+.s-line.bad { color: var(--rose) }
+.s-line.dim { color: var(--muted); font-weight: 500 }
+.sim { width: 100%; margin-top: 18px; text-align: left; display: grid; gap: 6px }
+.sim input { width: 100% }
+.hold { position: relative; overflow: hidden; margin-top: auto; width: 100%; border: 1px solid var(--line); background: #10141f; color: var(--muted); border-radius: 999px; padding: 16px; font-weight: 700; touch-action: none; user-select: none; -webkit-user-select: none }
+.hold i { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(255,122,107,.3) }
+.hold.holding i { width: 100%; transition: width 1.5s linear }
+.hold span { position: relative }
+.gs-note { flex-basis: 100%; color: var(--muted); font-size: 14px }
+.remote { width: 100%; margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: #0e121b; text-align: left; display: grid; gap: 12px }
+.r-state { margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 10px }
+.r-settings { display: grid; gap: 12px }
+.r-seg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
+.r-seg .lbl { flex-basis: 100% }
+.r-seg button { flex: 1 1 0; min-width: 0; border: 1px solid var(--line); background: none; border-radius: 10px; padding: 11px 6px; font-weight: 700; color: var(--muted) }
+.r-seg button[aria-pressed="true"] { background: var(--ink); color: #1c1408; border-color: var(--ink) }
+.r-actions { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) }
+.r-actions .btn { justify-content: center; padding: 14px 10px }
+.r-hold { margin-top: 0; grid-column: 1 / -1 }
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="Yol görünümü"></canvas>
+
+<section id="lobby" class="screen" hidden>
+  <div class="lobby-in">
+    <div>
+      <p class="eyebrow">Spinning bisikleti · telefon cepte</p>
+      <h1>Pedal Yolu</h1>
+      <p class="lede">Telefon cebinde pedal ritmini sayar, yol bu ekranda akar. Hızlı çevirirsen hızlı gidersin. Yokuşta direnci biraz artır, inişte nefeslen.</p>
+      <div class="modes" id="modes">
+        <button class="mode" data-mode="race3"><span class="m-key">1</span><span class="m-name">3 km yarış</span><span class="m-desc">7 rakip, sondan başlıyorsun</span></button>
+        <button class="mode" data-mode="race10"><span class="m-key">2</span><span class="m-name">10 km yarış</span><span class="m-desc">Uzun, tepeli parkur</span></button>
+        <button class="mode" data-mode="free"><span class="m-key">3</span><span class="m-name">Serbest sürüş</span><span class="m-desc">Bitiş yok, arada sprint görevleri</span></button>
+      </div>
+      <div class="diff" role="radiogroup" aria-label="Rakip zorluğu" id="diff">
+        <span class="lbl">Rakipler</span>
+        <button role="radio" data-diff="0">Kolay</button>
+        <button role="radio" data-diff="1">Orta</button>
+        <button role="radio" data-diff="2">Zor</button>
+      </div>
+      <div class="diff" role="radiogroup" aria-label="Yol tipi" id="roadSel">
+        <span class="lbl">Yol</span>
+        <button role="radio" data-road="mix">Karışık</button>
+        <button role="radio" data-road="duz">Düz</button>
+        <button role="radio" data-road="tepe">Tepeli</button>
+        <button role="radio" data-road="viraj">Virajlı</button>
+      </div>
+      <div class="diff">
+        <span class="lbl">Game System</span>
+        <button role="switch" id="gsBtn" aria-checked="false">Kapalı</button>
+        <span class="gs-note">Yarışlarda rakipler senin temponu öğrenir: öne kaçan yavaşlar, geride kalan hızlanır.</span>
+      </div>
+      <p class="hint">Telefonsuz denemek için <kbd>↑</kbd> ya da <kbd>Boşluk</kbd> tuşunu basılı tut, <kbd>Shift</kbd> ile sprint at. <kbd>Esc</kbd> mola, <kbd>M</kbd> ses.</p>
+    </div>
+    <aside class="pair card">
+      <h2>Telefonu bağla</h2>
+      <div class="pair-row">
+        <div class="qr" id="qr"></div>
+        <ol class="steps">
+          <li>Telefon kamerasıyla kodu okut.</li>
+          <li>Açılan sayfada <b>Başla</b>'ya bas, hareket iznini ver.</li>
+          <li>Telefonu pantolonun ön cebine koy. Ekran açık kalsın.</li>
+          <li>İstersen menüyü telefondaki kumandadan yönet.</li>
+        </ol>
+      </div>
+      <div class="pair-code"><span class="lbl">Kod</span><b id="code" class="num">·····</b><button id="newCode" class="link" type="button">Yeni kod</button></div>
+      <p class="pair-url" id="pairUrl"></p>
+      <div class="pair-status"><span class="dot" id="netDot"></span><span id="netText">Bağlanıyor…</span><span class="live"><b id="liveRpm" class="num">0</b> rpm</span></div>
+      <p class="diag" id="diag"></p>
+      <p class="warn-note" id="localNote" hidden>Bu kopya bilgisayardan yerel açılmış. Telefonun bağlanabilmesi için sayfayı internet (https) adresinden aç.</p>
+    </aside>
+  </div>
+  <footer class="journey">
+    <div class="j-head"><span class="lbl">Toplam yol · İstanbul → Ankara (yaklaşık)</span><span id="jText"></span></div>
+    <div class="j-track" id="jTrack"><i class="j-fill" id="jFill"></i></div>
+  </footer>
+</section>
+
+<div id="hud" hidden>
+  <div class="hb tl">
+    <div class="speed-row"><span class="num xl" id="hSpeed">0</span><span class="lbl">km/sa</span></div>
+  </div>
+  <div class="hb tc" id="hRankBox">
+    <div class="lbl">Sıra</div>
+    <div class="num lg"><span id="hRank">8</span><span class="of">/<span id="hField">8</span></span></div>
+  </div>
+  <div class="hb tr">
+    <div class="num lg" id="hDist">0,00</div>
+    <div class="lbl" id="hDistLbl">/ 3 km</div>
+    <div class="num md" id="hTime">00:00</div>
+  </div>
+  <div class="hb bl gauge">
+    <svg viewBox="0 0 120 70" aria-hidden="true">
+      <path class="g-track" d="M12 62 A48 48 0 0 1 108 62" pathLength="100"/>
+      <path class="g-zone" d="M12 62 A48 48 0 0 1 108 62" pathLength="100" stroke-dasharray="21.4 100" stroke-dashoffset="-50"/>
+      <path class="g-val" id="gVal" d="M12 62 A48 48 0 0 1 108 62" pathLength="100" stroke-dasharray="0 100"/>
+    </svg>
+    <span class="num lg" id="hRpm">0</span>
+    <span class="lbl">rpm</span>
+  </div>
+  <div class="hb br">
+    <span class="chip" id="hGrade">Düz yol</span>
+    <span class="chip" id="hSrc">Klavye</span>
+  </div>
+  <div id="banner" class="banner" hidden></div>
+  <div id="sprint" class="sprint" hidden><div class="sprint-lbl" id="sprintLbl"></div><div class="sprint-bar"><i id="sprintFill"></i></div></div>
+  <div id="bigmsg" class="bigmsg" hidden><b id="bigT"></b><span id="bigS"></span></div>
+</div>
+
+<section id="pause" class="overlay" hidden>
+  <div class="card pz">
+    <p class="lbl">Mola</p>
+    <h2>Su iç</h2>
+    <p>Sayaç durdu. Hazır olunca devam et.</p>
+    <div class="actions">
+      <button class="btn primary" id="pResume">Devam <kbd>Esc</kbd></button>
+      <button class="btn" id="pEnd">Bitir</button>
+      <button class="btn ghost" id="pMenu">Menü</button>
+    </div>
+  </div>
+</section>
+
+<section id="results" class="overlay" hidden>
+  <div class="card res">
+    <p class="lbl" id="rKind"></p>
+    <h2 id="rTitle"></h2>
+    <p class="note" id="rNote"></p>
+    <dl class="stats" id="rStats"></dl>
+    <ol class="board" id="rBoard"></ol>
+    <div class="actions">
+      <button class="btn primary" id="rAgain">Tekrar <kbd>Enter</kbd></button>
+      <button class="btn" id="rMenu">Menü <kbd>Esc</kbd></button>
+    </div>
+  </div>
+</section>
+
+<section id="sensor" class="screen" hidden>
+  <div class="s-wrap">
+    <header class="s-head"><b>Pedal Yolu</b><span id="sVer">telefon sensörü</span></header>
+    <form id="sJoin" class="s-panel" hidden>
+      <label for="sCode">Mac ekranındaki kodu yaz</label>
+      <input id="sCode" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8">
+      <button class="btn primary big" type="submit">Devam</button>
+      <p id="sJoinErr" class="s-err" hidden>Kod en az 4 karakter olmalı.</p>
+    </form>
+    <div id="sIdle" class="s-panel" hidden>
+      <p class="s-code">Kod<b id="sCodeShow"></b></p>
+      <ol class="steps">
+        <li><b>Başla</b>'ya bas, hareket iznini ver.</li>
+        <li>Telefonu pantolonun ön cebine koy. Yönü fark etmez.</li>
+        <li>Pedal çevir. Ritim 3-4 saniyede oturur.</li>
+      </ol>
+      <button id="sGo" class="btn primary big" type="button">Başla</button>
+      <p id="sErr" class="s-err" hidden></p>
+    </div>
+    <div id="sRun" class="s-run" hidden>
+      <div class="num s-rpm" id="sRpm">0</div>
+      <div class="lbl">rpm</div>
+      <p class="s-line" id="sNet">Bağlanıyor…</p>
+      <p class="s-line dim" id="sSig">Pedal bekleniyor</p>
+      <p class="s-line dim diag" id="sDiag"></p>
+      <p class="s-line dim" id="sWake" hidden>Ekran kapanırsa sayım durur. Telefonun otomatik kilidini geçici olarak kapat.</p>
+      <div class="remote" id="sRemote" hidden>
+        <p class="r-state"><span class="lbl">Kumanda</span><b id="rState"></b></p>
+        <div class="r-settings" id="rSettings">
+          <div class="r-seg" id="rMode"><button type="button" data-v="race3">3 km</button><button type="button" data-v="race10">10 km</button><button type="button" data-v="free">Serbest</button></div>
+          <div class="r-seg" id="rDiff"><span class="lbl">Rakipler</span><button type="button" data-v="0">Kolay</button><button type="button" data-v="1">Orta</button><button type="button" data-v="2">Zor</button></div>
+          <div class="r-seg" id="rRoad"><span class="lbl">Yol</span><button type="button" data-v="mix">Karışık</button><button type="button" data-v="duz">Düz</button><button type="button" data-v="tepe">Tepeli</button><button type="button" data-v="viraj">Virajlı</button></div>
+          <div class="r-seg" id="rGs"><span class="lbl">Game System</span><button type="button" data-v="0">Kapalı</button><button type="button" data-v="1">Açık</button></div>
+        </div>
+        <div class="r-actions" id="rActions"></div>
+      </div>
+      <div class="sim" id="sSim" hidden><label for="sSimR">Sanal pedal: <b id="sSimV">80</b> rpm</label><input type="range" id="sSimR" min="0" max="130" value="80"></div>
+      <button id="sStop" class="hold" type="button"><i></i><span>Durdurmak için basılı tut</span></button>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/nosleep/0.12.0/NoSleep.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+const VERSION = 'v5-beta';
+const PREFIX = 'pedalyolu-v1-';
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const PeerCtor = window.Peer || (window.peerjs && window.peerjs.Peer) || null;
+const PEER_OPTS = { host: '0.peerjs.com', port: 443, secure: true, path: '/', debug: 0 };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('py.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('py.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeIn = (a, b, t) => a + (b - a) * t * t;
+const easeInOut = (a, b, t) => a + (b - a) * (-Math.cos(t * Math.PI) / 2 + 0.5);
+function rng(seed) {
+  return () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+const cleanCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+const fmtTime = s => { s = Math.max(0, Math.floor(s)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+const fmtKm = m => (m / 1000).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt1 = n => n.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/* ---------- Cadence: pedal rhythm from a phone in the thigh pocket ----------
+   The thigh swings once per crank turn. The last 2.4 s of gyro (or accelerometer)
+   is resampled to 50 Hz; a 3-axis autocorrelation finds the period robustly, then
+   the time between the last two rising zero crossings on the main motion axis
+   gives a per-revolution reading so speed changes show up within one turn. */
+const Cadence = (() => {
+  const FS = 50, N = 120, KMIN = 15, KMAX = 75;          // 40..200 rpm
+  const buf = [];
+  let out = 0, q = 0, src = '';
+  function push(t, g, a) {
+    buf.push({ t, g, a });
+    while (buf.length && buf[0].t < t - 4000) buf.shift();
+  }
+  function grid(key) {
+    const tEnd = buf[buf.length - 1].t, t0 = tEnd - (N - 1) * 1000 / FS;
+    if (buf[0].t > t0 + 150) return null;
+    const X = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+    let j = 0;
+    for (let i = 0; i < N; i++) {
+      const tg = t0 + i * 1000 / FS;
+      while (j < buf.length - 2 && buf[j + 1].t <= tg) j++;
+      const s0 = buf[j], s1 = buf[j + 1] || s0, v0 = s0[key], v1 = s1[key];
+      if (!v0 || !v1) return null;
+      const f = s1.t > s0.t ? clamp((tg - s0.t) / (s1.t - s0.t), 0, 1) : 0;
+      for (let k = 0; k < 3; k++) X[k][i] = v0[k] + (v1[k] - v0[k]) * f;
+    }
+    for (const x of X) { let m = 0; for (let i = 0; i < N; i++) m += x[i]; m /= N; for (let i = 0; i < N; i++) x[i] -= m; }
+    return X;
+  }
+  function rms(X, from) { let s = 0; for (const x of X) for (let i = from; i < N; i++) s += x[i] * x[i]; return Math.sqrt(s / (N - from)); }
+  function period(X) {
+    let r0 = 0; for (const x of X) for (let i = 0; i < N; i++) r0 += x[i] * x[i];
+    r0 /= N; if (!(r0 > 0)) return null;
+    const r = new Float32Array(KMAX + 2);
+    for (let k = KMIN - 1; k <= KMAX + 1; k++) {
+      let s = 0; for (const x of X) for (let i = 0; i < N - k; i++) s += x[i] * x[i + k];
+      r[k] = s / (N - k) / r0;
+    }
+    const peaks = [];
+    for (let k = KMIN; k <= KMAX; k++) if (r[k] > r[k - 1] && r[k] >= r[k + 1] && r[k] > 0.25) peaks.push(k);
+    if (!peaks.length) return null;
+    let best = peaks[0];
+    for (const k of peaks) if (r[k] > r[best]) best = k;
+    for (const k of peaks) if (k < best * 0.7 && r[k] > r[best] * 0.8) { best = k; break; }   // avoid locking on 2x the period
+    const a = r[best - 1], b = r[best], c = r[best + 1], den = a - 2 * b + c;
+    const kf = best + (den < 0 ? 0.5 * (a - c) / den : 0);
+    return { rpm: 60 * FS / kf, q: b, k: kf };
+  }
+  /* Last full revolution, from rising zero crossings on the principal motion axis */
+  function lastTurn(X, k) {
+    const C = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < N; i++) for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) C[a * 3 + b] += X[a][i] * X[b][i];
+    let v = [1, 0.7, 0.4];
+    for (let it = 0; it < 10; it++) {
+      const w = [0, 1, 2].map(a => C[a * 3] * v[0] + C[a * 3 + 1] * v[1] + C[a * 3 + 2] * v[2]);
+      const n = Math.hypot(w[0], w[1], w[2]) || 1; v = w.map(x => x / n);
+    }
+    const s = new Float32Array(N);
+    for (let i = 0; i < N; i++) s[i] = v[0] * X[0][i] + v[1] * X[1][i] + v[2] * X[2][i];
+    let e = 0; for (let i = 0; i < N; i++) e += s[i] * s[i];
+    const h = 0.3 * Math.sqrt(e / N), ups = [];
+    let armed = false;
+    for (let i = 1; i < N; i++) {
+      if (s[i] < -h) armed = true;
+      if (armed && s[i - 1] < 0 && s[i] >= 0) { ups.push(i - 1 + (-s[i - 1]) / (s[i] - s[i - 1])); armed = false; }
+    }
+    if (ups.length < 2) return 0;
+    const p = ups[ups.length - 1] - ups[ups.length - 2];
+    return Math.abs(p - k) / k < 0.3 ? 60 * FS / p : 0;
+  }
+  function analyse(key, thr) {
+    const X = grid(key); if (!X) return null;
+    if (rms(X, N - 30) < thr || rms(X, 0) < thr * 0.7) return { idle: true };
+    const p = period(X);
+    if (!p || p.q < 0.35) return { weak: true };
+    const turn = lastTurn(X, p.k);
+    return { rpm: turn ? turn * 0.65 + p.rpm * 0.35 : p.rpm, q: p.q };
+  }
+  function compute() {
+    let res = null, kind = '', weak = false;
+    if (buf.length > 20) {
+      const g = analyse('g', 12);
+      if (g && g.rpm) { res = g; kind = 'jiroskop'; }
+      else {
+        const a = analyse('a', 0.7);
+        if (a && a.rpm) { res = a; kind = 'ivmeölçer'; }
+        weak = !!((g && g.weak) || (a && a.weak));
+      }
+    }
+    if (res) { out = out < 1 ? res.rpm : out + (res.rpm - out) * 0.6; q = res.q; src = kind; }
+    else { out *= weak ? 0.85 : 0.45; if (out < 15) out = 0; q = 0; }
+    return { rpm: out, q, src, weak };
+  }
+  return { push, compute, count: () => buf.length };
+})();
+
+/* ---------- Link between the Mac page and the phone page (PeerJS / WebRTC) ---------- */
+function hostLink(h) {
+  if (!PeerCtor) { h.status('nolib'); return { restart() {}, broadcast() {} }; }
+  let peer = null, conns = 0, taken = 0;
+  const open = new Set();
+  function start() {
+    peer = new PeerCtor(PREFIX + h.code(), PEER_OPTS);
+    const me = peer;
+    me.on('open', () => { taken = 0; h.status(conns ? 'phone' : 'ready'); });
+    me.on('connection', c => {
+      c.on('open', () => { conns++; open.add(c); h.status('phone'); });
+      c.on('data', d => h.data(d));
+      c.on('close', () => { open.delete(c); conns = Math.max(0, conns - 1); h.status(conns ? 'phone' : 'ready'); });
+      c.on('error', () => {});
+    });
+    me.on('disconnected', () => setTimeout(() => { if (me === peer && !me.destroyed && me.disconnected) me.reconnect(); }, 2000));
+    me.on('error', e => {
+      if (me !== peer || e.type === 'peer-unavailable') return;
+      if (e.type === 'unavailable-id') { me.destroy(); if (++taken >= 3) { taken = 0; h.newCode(); } h.status('wait'); setTimeout(start, 2500); return; }
+      h.status('offline');
+      setTimeout(() => { if (me !== peer) return; if (me.destroyed) start(); else if (me.disconnected) me.reconnect(); }, 3000);
+    });
+  }
+  start();
+  return {
+    restart() { const old = peer; peer = null; try { old.destroy(); } catch (e) {} conns = 0; open.clear(); start(); },
+    broadcast(d) { for (const c of open) if (c.open) { try { c.send(d); } catch (e) {} } }
+  };
+}
+function joinLink(code, h) {
+  if (!PeerCtor) { h.status('nolib'); return { send() {} }; }
+  let peer = null, conn = null, timer = 0;
+  function start() {
+    peer = new PeerCtor(PEER_OPTS);
+    const me = peer;
+    me.on('open', connect);
+    me.on('disconnected', () => setTimeout(() => { if (!me.destroyed && me.disconnected) me.reconnect(); }, 2000));
+    me.on('error', e => {
+      if (e.type === 'peer-unavailable') { h.status('nogame'); retry(3000); return; }
+      h.status('offline');
+      setTimeout(() => { if (me !== peer) return; if (me.destroyed) start(); else if (me.disconnected) me.reconnect(); }, 3000);
+    });
+  }
+  function connect() {
+    if (conn) { try { conn.close(); } catch (e) {} }
+    h.status('connecting');
+    const c = peer.connect(PREFIX + code, { serialization: 'json', reliable: false });
+    conn = c;
+    c.on('open', () => { if (conn === c) h.status('ok'); });
+    c.on('data', d => { if (conn === c && h.message) h.message(d); });
+    c.on('close', () => { if (conn === c) { h.status('lost'); retry(2000); } });
+    c.on('error', () => { if (conn === c) retry(2000); });
+    setTimeout(() => { if (conn === c && !c.open) retry(0); }, 9000);
+  }
+  function retry(ms) {
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (!peer) return; if (peer.destroyed) start(); else if (peer.open) connect(); }, ms);
+  }
+  start();
+  return { send(d) { if (conn && conn.open) { try { conn.send(d); } catch (e) {} } } };
+}
+
+/* Relay over two public MQTT brokers: works when a direct WebRTC link can't be made
+   (browser privacy settings, NAT). The phone publishes rpm, the Mac publishes a heartbeat. */
+const MQTT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+function relayLink(getCode, role, h) {
+  if (!window.mqtt || qs.has('norelay')) return { send() {}, connected: () => false, count: () => 0, retopic() {} };
+  const base = c => 'pedalyolu/v1/' + c;
+  const inTopic = role === 'host' ? '/rpm' : '/host', outTopic = role === 'host' ? '/host' : '/rpm';
+  let cur = getCode();
+  const clients = MQTT_BROKERS.map(url => {
+    let c;
+    try {
+      c = window.mqtt.connect(url, { clientId: 'py_' + role + '_' + Math.random().toString(36).slice(2, 10), clean: true, connectTimeout: 8000, reconnectPeriod: 3000, keepalive: 30 });
+    } catch (e) { return null; }
+    c.on('connect', () => c.subscribe(base(cur) + inTopic, { qos: 0 }));
+    c.on('message', (t, payload) => {
+      if (t !== base(cur) + inTopic) return;
+      try { h.message(JSON.parse(String(payload))); } catch (e) {}
+    });
+    c.on('error', () => {});
+    return c;
+  }).filter(Boolean);
+  return {
+    send(obj) { const s = JSON.stringify(obj); for (const c of clients) if (c.connected) c.publish(base(cur) + outTopic, s, { qos: 0 }); },
+    connected: () => clients.some(c => c.connected),
+    count: () => clients.filter(c => c.connected).length,
+    retopic() {
+      const old = cur; cur = getCode(); if (old === cur) return;
+      for (const c of clients) if (c.connected) { c.unsubscribe(base(old) + inTopic); c.subscribe(base(cur) + inTopic, { qos: 0 }); }
+    }
+  };
+}
+
+/* ---------- Phone: sensor page ---------- */
+function startSensor() {
+  document.body.classList.add('is-sensor');
+  $('view').hidden = true;
+  $('sensor').hidden = false;
+  $('sVer').textContent = 'telefon sensörü · ' + VERSION;
+  const sim = qs.has('sim');
+  let code = cleanCode(qs.get('k'));
+  let link = null, running = false, seen = 0, wake = null, loop = 0, simLoop = 0, simRpm = 80, simPh = 0, simLast = 0;
+  let relay = null, peerState = 'connecting', lastHost = 0;
+
+  if (code) showStart();
+  else { $('sJoin').hidden = false; $('sCode').value = store.get('lastCode', ''); }
+  $('sJoin').addEventListener('submit', e => {
+    e.preventDefault();
+    const c = cleanCode($('sCode').value);
+    if (c.length < 4) { $('sJoinErr').hidden = false; return; }
+    code = c; showStart();
+  });
+  function showStart() {
+    store.set('lastCode', code);
+    $('sJoin').hidden = true; $('sIdle').hidden = false;
+    $('sCodeShow').textContent = code;
+  }
+  let noSleep = null;
+  function wakeOn() {        // must run inside the tap: iPhone only keeps the screen on after a gesture
+    try {
+      if (!noSleep && window.NoSleep) noSleep = new window.NoSleep();
+      if (noSleep && !noSleep.isEnabled) Promise.resolve(noSleep.enable()).then(() => { $('sWake').hidden = true; }, () => { $('sWake').hidden = false; });
+    } catch (e) { $('sWake').hidden = false; }
+  }
+  $('sGo').addEventListener('click', () => {
+    $('sErr').hidden = true;
+    wakeOn();
+    const DME = window.DeviceMotionEvent;
+    if (!sim && DME && typeof DME.requestPermission === 'function') {
+      DME.requestPermission()
+        .then(st => st === 'granted' ? begin() : fail('Hareket izni verilmedi. Safari\'yi tamamen kapatıp sayfayı yeniden aç ve izin sorusunda "İzin Ver"e bas.'))
+        .catch(() => fail('Hareket izni istenemedi. Sayfayı yenileyip tekrar Başla\'ya bas.'));
+    } else begin();
+  });
+  function fail(msg) {
+    stop(true);
+    $('sErr').textContent = msg; $('sErr').hidden = false;
+  }
+  function begin() {
+    running = true; seen = 0;
+    $('sIdle').hidden = true; $('sRun').hidden = false;
+    if (sim) { $('sSim').hidden = false; simLast = performance.now(); simLoop = setInterval(simStep, 16); }
+    else window.addEventListener('devicemotion', onMotion);
+    keepAwake();
+    if (!link && !qs.has('nopeer')) link = joinLink(code, { status: netStatus, message: onHost });
+    if (!relay) relay = relayLink(() => code, 'phone', { message: onHost });
+    clearInterval(loop); loop = setInterval(tick, 150);
+    setTimeout(() => { if (running && !sim && !seen) fail('Telefon hareket verisi göndermiyor. Chrome kullanıyorsan: Ayarlar › Site ayarları › Hareket sensörleri açık olmalı.'); }, 2500);
+  }
+  function stop(silent) {
+    running = false;
+    clearInterval(loop); clearInterval(simLoop);
+    window.removeEventListener('devicemotion', onMotion);
+    if (wake) { try { wake.release(); } catch (e) {} wake = null; }
+    if (noSleep) { try { noSleep.disable(); } catch (e) {} }
+    if (link) link.send({ r: 0, q: 0, s: '' });
+    if (relay) relay.send({ r: 0, q: 0, s: '' });
+    $('sRun').hidden = true; $('sIdle').hidden = false;
+    if (!silent) $('sRpm').textContent = '0';
+  }
+  function onMotion(e) {
+    const rr = e.rotationRate, ag = e.accelerationIncludingGravity;
+    const g = rr && rr.alpha != null ? [rr.alpha, rr.beta, rr.gamma] : null;
+    const a = ag && ag.x != null ? [ag.x, ag.y, ag.z] : null;
+    if (!g && !a) return;
+    seen++;
+    Cadence.push(performance.now(), g, a);
+  }
+  function simStep() {
+    const now = performance.now(), dt = (now - simLast) / 1000; simLast = now;
+    simPh += simRpm / 60 * Math.PI * 2 * dt;
+    const amp = simRpm > 0 ? 1 : 0, n = () => (Math.random() - 0.5) * 2;
+    seen++;
+    Cadence.push(now,
+      [amp * 130 * Math.sin(simPh) + 6 * n(), amp * 40 * Math.sin(simPh + 0.8) + 6 * n(), amp * 18 * Math.sin(2 * simPh) + 4 * n()],
+      [amp * 3.6 * Math.sin(simPh + 0.3) + 0.15 * n(), 9.4 + amp * 1.2 * Math.cos(simPh) + 0.15 * n(), 1.5 + 0.15 * n()]);
+  }
+  $('sSimR').addEventListener('input', e => { simRpm = +e.target.value; $('sSimV').textContent = simRpm; });
+  function tick() {
+    const r = Cadence.compute();
+    $('sRpm').textContent = Math.round(r.rpm);
+    const sig = $('sSig');
+    if (r.rpm > 0) { sig.textContent = 'Ritim yakalandı (' + r.src + ')'; sig.className = 's-line ok'; }
+    else if (r.weak) { sig.textContent = 'Hareket var ama ritim net değil. Telefonu uyluk hizasındaki cebe koy.'; sig.className = 's-line dim'; }
+    else { sig.textContent = Cadence.count() ? 'Pedal bekleniyor' : 'Sensör verisi bekleniyor'; sig.className = 's-line dim'; }
+    const msg = { r: Math.round(r.rpm * 10) / 10, q: Math.round(r.q * 100) / 100, s: r.src };
+    if (link) link.send(msg);
+    if (relay) relay.send(msg);
+    renderNet();
+  }
+  const NET = {
+    connecting: ['Oyun ekranına bağlanıyor…', ''],
+    ok: ['Bağlandı. Telefonu cebe koy, Mac ekranına geç.', 'ok'],
+    nogame: ['Oyun ekranı bulunamadı. Mac\'te sayfa açık mı, kod doğru mu? Yeniden deneniyor.', 'bad'],
+    lost: ['Bağlantı koptu, yeniden deneniyor…', 'bad'],
+    offline: ['İnternete ulaşılamıyor, yeniden deneniyor…', 'bad'],
+    nolib: ['Bağlantı kütüphanesi yüklenemedi. İnterneti kontrol edip sayfayı yenile.', 'bad']
+  };
+
+  /* ---------- remote control ---------- */
+  let hostState = null, synced = false, remoteAlive = false;
+  const rSel = Object.assign({ mode: 'race3', diff: 1, road: 'mix', gs: 0 }, store.get('remote', {}));
+  const ST = { attract: 'menüde', ready: 'başlamaya hazır', count: 'geri sayımda', run: 'yarışta', finish: 'bitişte', results: 'sonuç ekranında', paused: 'molada' };
+  function onHost(m) {
+    if (!m || !m.h) return;
+    lastHost = Date.now();
+    if (!synced) { synced = true; Object.assign(rSel, { diff: m.diff | 0, road: m.road || 'mix', gs: m.gs ? 1 : 0 }); if (m.mode && m.mode !== 'attract') rSel.mode = m.mode; markRemote(); }
+    const changed = !hostState || hostState.st !== m.st;
+    hostState = m;
+    renderNet();
+    if (changed || !remoteAlive) renderRemote();
+  }
+  function cmd(a) {
+    const m = { c: 1, a, id: Math.random().toString(36).slice(2, 10), mode: rSel.mode, diff: rSel.diff, road: rSel.road, gs: rSel.gs ? 1 : 0 };
+    if (link) link.send(m);
+    if (relay) relay.send(m);
+    if (navigator.vibrate) navigator.vibrate(25);
+  }
+  function markRemote() {
+    for (const [id, key] of [['rMode', 'mode'], ['rDiff', 'diff'], ['rRoad', 'road'], ['rGs', 'gs']])
+      $(id).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(rSel[key]))));
+  }
+  for (const [id, key, num] of [['rMode', 'mode', false], ['rDiff', 'diff', true], ['rRoad', 'road', false], ['rGs', 'gs', true]]) {
+    $(id).addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      rSel[key] = num ? +b.dataset.v : b.dataset.v;
+      store.set('remote', { mode: rSel.mode, diff: rSel.diff, road: rSel.road, gs: rSel.gs });
+      markRemote();
+      if (key !== 'mode') cmd('set');
+    });
+  }
+  function actionBtn(label, a, primary) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label;
+    b.addEventListener('click', () => cmd(a)); return b;
+  }
+  function holdBtn(label, a) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'hold r-hold';
+    b.innerHTML = '<i></i><span></span>'; b.querySelector('span').textContent = label;
+    let t = 0;
+    b.addEventListener('pointerdown', () => { b.classList.add('holding'); t = setTimeout(() => { b.classList.remove('holding'); cmd(a); }, 900); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { b.classList.remove('holding'); clearTimeout(t); }));
+    return b;
+  }
+  function renderRemote() {
+    remoteAlive = !!hostState && Date.now() - lastHost < 5000;
+    $('sRemote').hidden = !remoteAlive;
+    if (!remoteAlive) return;
+    const st = hostState.st;
+    $('rState').textContent = 'Mac ' + (ST[st] || st);
+    $('rSettings').hidden = !(st === 'attract' || st === 'results' || st === 'ready');
+    const box = $('rActions'); box.textContent = '';
+    if (st === 'attract') box.append(actionBtn('Başlat', 'start', true));
+    else if (st === 'ready') box.append(actionBtn('Geri sayımı başlat', 'go', true), actionBtn('Ayarlarla yeniden', 'start'), actionBtn('Menü', 'menu'));
+    else if (st === 'paused') box.append(actionBtn('Devam', 'resume', true), actionBtn('Bitir', 'end'), actionBtn('Menü', 'menu'));
+    else if (st === 'results') box.append(actionBtn('Tekrar', 'start', true), actionBtn('Menü', 'menu'));
+    else box.append(holdBtn('Mola için basılı tut', 'pause'));
+  }
+  markRemote();
+  setInterval(() => { const alive = !!hostState && Date.now() - lastHost < 5000; if (alive !== remoteAlive) renderRemote(); }, 1000);
+
+  function netStatus(s) { peerState = s; renderNet(); }
+  function renderNet() {
+    let s = peerState === 'ok' || Date.now() - lastHost < 4000 ? 'ok' : peerState;
+    if (s === 'nolib' && relay && relay.connected()) s = 'connecting';
+    const [t, c] = NET[s] || NET.connecting, el = $('sNet');
+    if (el.textContent !== t) { el.textContent = t; el.className = 's-line ' + c; }
+    const PS = { connecting: 'bağlanıyor', ok: 'bağlı', nogame: 'Mac yok', lost: 'koptu', offline: 'internet yok', nolib: 'yüklenemedi' };
+    const ago = lastHost ? Math.round((Date.now() - lastHost) / 1000) + ' sn önce' : 'yok';
+    $('sDiag').textContent = VERSION + ' · doğrudan: ' + (link ? PS[peerState] || peerState : 'kapalı') + ' · sunucu: ' + (relay ? relay.count() : 0) + '/2 · Mac sinyali: ' + ago;
+  }
+  async function keepAwake() {
+    const covered = () => !!(noSleep && noSleep.isEnabled);
+    if (!('wakeLock' in navigator)) { $('sWake').hidden = covered(); return; }
+    try { wake = await navigator.wakeLock.request('screen'); $('sWake').hidden = true; } catch (e) { $('sWake').hidden = covered(); }
+  }
+  document.addEventListener('visibilitychange', () => { if (running && document.visibilityState === 'visible') keepAwake(); });
+  let holdT = 0; const hb = $('sStop');
+  hb.addEventListener('pointerdown', () => { hb.classList.add('holding'); holdT = setTimeout(() => { hb.classList.remove('holding'); stop(); }, 1500); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => hb.addEventListener(ev, () => { hb.classList.remove('holding'); clearTimeout(holdT); }));
+}
+
+/* ---------- Sound ---------- */
+const Sound = (() => {
+  let ac = null, windGain = null, windFilter = null, muted = store.get('muted', false);
+  function ensure() {
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; return; }
+    const len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    windFilter = ac.createBiquadFilter(); windFilter.type = 'lowpass'; windFilter.frequency.value = 300;
+    windGain = ac.createGain(); windGain.gain.value = 0;
+    src.connect(windFilter).connect(windGain).connect(ac.destination); src.start();
+  }
+  function wind(v) {
+    if (!ac) return;
+    windGain.gain.setTargetAtTime(muted ? 0 : Math.min(0.45, v * v * 0.0035), ac.currentTime, 0.4);
+    windFilter.frequency.setTargetAtTime(220 + v * 55, ac.currentTime, 0.4);
+  }
+  function tone(f, dur, type, vol, when) {
+    if (!ac || muted) return;
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + (when || 0);
+    o.type = type || 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol || 0.12, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.05);
+  }
+  return {
+    ensure, wind,
+    count() { tone(520, 0.15, 'square', 0.06); },
+    go() { tone(1040, 0.4, 'square', 0.07); },
+    pass() { tone(660, 0.12, 'triangle', 0.12); tone(990, 0.18, 'triangle', 0.12, 0.09); },
+    passed() { tone(300, 0.22, 'sawtooth', 0.05); },
+    sprint() { tone(700, 0.1, 'square', 0.06); tone(700, 0.1, 'square', 0.06, 0.16); },
+    win() { tone(784, 0.15, 'triangle', 0.12); tone(1175, 0.28, 'triangle', 0.12, 0.12); },
+    finish() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.3, 'triangle', 0.13, i * 0.13)); },
+    toggle() { muted = !muted; store.set('muted', muted); return muted; }
+  };
+})();
+
+/* ---------- Mac: the game (three.js) ---------- */
+function startGame() {
+  const THREE = window.THREE;
+  const cv = $('view');
+  const STEP = 2;                          // metres between centre-line samples
+  const CHUNK = 100;                       // samples per terrain chunk (200 m)
+  const ROAD_HALF = 3.6, SHOULDER = 1.1;
+  const AHEAD = 1100, BEHIND = 80;
+  const START_S = 80;                      // metres of road before the start line
+  const MPS_PER_RPM = 0.11;                // 90 rpm on the flat ≈ 36 km/h
+  const LANE_R = 1.7, LANE_L = -1.3;
+  const RIVALS = [
+    { name: 'Efe', jersey: '#e4572e', helmet: '#f4f1de', frame: '#d9d9d9' },
+    { name: 'Selin', jersey: '#2a9d8f', helmet: '#264653', frame: '#f2f2f2' },
+    { name: 'Bora', jersey: '#3d5a80', helmet: '#e0fbfc', frame: '#ee6c4d' },
+    { name: 'Ece', jersey: '#9b5de5', helmet: '#f15bb5', frame: '#fee440' },
+    { name: 'Kaan', jersey: '#f4a261', helmet: '#2b2d42', frame: '#264653' },
+    { name: 'Duru', jersey: '#ef476f', helmet: '#073b4c', frame: '#ffffff' },
+    { name: 'Arda', jersey: '#118ab2', helmet: '#ffd166', frame: '#06d6a0' }
+  ];
+  const ME = { name: 'Sen', jersey: '#ffa63d', helmet: '#f3ead8', frame: '#1d2333' };
+  const DIFFS = [{ name: 'Kolay', k: 0.86 }, { name: 'Orta', k: 1 }, { name: 'Zor', k: 1.12 }];
+  const MODES = {
+    race3: { goal: 3000, rivals: 7, label: '3 km yarış' },
+    race10: { goal: 10000, rivals: 7, label: '10 km yarış' },
+    free: { goal: Infinity, rivals: 0, label: 'Serbest sürüş' },
+    attract: { goal: Infinity, rivals: 3, label: '' }
+  };
+  const ROUTE = 450;
+  const STOPS = [['İstanbul', 0], ['Gebze', 50], ['İzmit', 100], ['Adapazarı', 150], ['Düzce', 210], ['Bolu', 255], ['Gerede', 300], ['Kızılcahamam', 375], ['Ankara', 450]];
+  const Input = { kb: 0, sensor: 0, at: 0, q: 0, src: '', shown: 0, net: 'wait' };
+  const keys = { up: false, fast: false };
+
+  const ROADS = {
+    mix: { name: 'Karışık', flat: 0.28, curve: 0.34, g0: 0.018, g1: 0.048, rMin: 180, rSpan: 340, dy: 1 },
+    duz: { name: 'Düz', flat: 0.55, curve: 0.37, g0: 0.008, g1: 0.02, rMin: 260, rSpan: 420, dy: 0.4 },
+    tepe: { name: 'Tepeli', flat: 0.15, curve: 0.2, g0: 0.03, g1: 0.062, rMin: 200, rSpan: 300, dy: 1.2 },
+    viraj: { name: 'Virajlı', flat: 0.12, curve: 0.66, g0: 0.015, g1: 0.035, rMin: 170, rSpan: 170, dy: 1 }
+  };
+  let state = 'attract', modeKey = store.get('mode', 'race3'), diff = clamp(store.get('diff', 1) | 0, 0, 2);
+  let road = ROADS[store.get('road', 'mix')] ? store.get('road', 'mix') : 'mix', gs = !!store.get('gs', false);
+  let R = null, T = null;
+
+  /* ---------- noise ---------- */
+  function hash2(x, y) { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+  function noise2(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    return lerp(lerp(hash2(xi, yi), hash2(xi + 1, yi), u), lerp(hash2(xi, yi + 1), hash2(xi + 1, yi + 1), u), v);
+  }
+  const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+  /* ---------- renderer & scene ---------- */
+  let renderer = null;
+  try { renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, powerPreference: 'high-performance' }); } catch (e) { renderer = null; }
+  if (!renderer) { $('lobby').hidden = false; $('netText').textContent = 'Bu tarayıcı 3D çizemiyor (WebGL kapalı)'; return; }
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  const scene = new THREE.Scene();
+  const HAZE = new THREE.Color('#e7b98f');
+  scene.fog = new THREE.Fog(HAZE, 120, 820);
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 4000);
+  const SUN_DIR = new THREE.Vector3(-0.55, 0.36, -0.75).normalize();
+
+  const hemi = new THREE.HemisphereLight('#c9d8ff', '#6f5b3c', 1.15);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight('#ffd9a8', 2.6);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 320 });
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+  scene.add(sun, sun.target);
+
+  /* sky dome with sun glow; follows the camera */
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      top: { value: new THREE.Color('#2a4472') }, mid: { value: new THREE.Color('#8a86a8') },
+      low: { value: new THREE.Color('#f2b27a') }, sunCol: { value: new THREE.Color('#fff0d0') }, sunDir: { value: SUN_DIR }
+    },
+    vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: [
+      'uniform vec3 top; uniform vec3 mid; uniform vec3 low; uniform vec3 sunCol; uniform vec3 sunDir; varying vec3 vDir;',
+      'void main(){ float h = vDir.y;',
+      ' vec3 c = mix(low, mid, smoothstep(-0.02, 0.22, h)); c = mix(c, top, smoothstep(0.22, 0.8, h));',
+      ' float sd = max(dot(normalize(vDir), sunDir), 0.0);',
+      ' c += sunCol * (pow(sd, 900.0) * 3.0 + pow(sd, 40.0) * 0.35 + pow(sd, 6.0) * 0.18);',
+      ' gl_FragColor = vec4(c, 1.0);',
+      ' #include <tonemapping_fragment>',
+      ' #include <colorspace_fragment>',
+      '}'
+    ].join('\n')
+  }));
+  sky.renderOrder = -2;
+  scene.add(sky);
+
+  /* distant mountain rings; follow the camera so they never get closer */
+  function mountainRing(radius, minH, maxH, seed, cTop, cBot, freq) {
+    const segs = 160, pos = [], col = [], ct = new THREE.Color(cTop), cb = new THREE.Color(cBot), r = rng(seed);
+    const peaks = Array.from({ length: segs }, (_, i) => {
+      const t = i / segs * Math.PI * 2; let h = 0.5;
+      for (let k = 1; k <= 4; k++) h += Math.sin(t * freq * k + r() * 6) * 0.25 / k;
+      return minH + (maxH - minH) * clamp(h, 0, 1) * (0.7 + r() * 0.3);
+    });
+    for (let i = 0; i < segs; i++) {
+      const a0 = i / segs * Math.PI * 2, a1 = (i + 1) / segs * Math.PI * 2;
+      const x0 = Math.sin(a0) * radius, z0 = Math.cos(a0) * radius, x1 = Math.sin(a1) * radius, z1 = Math.cos(a1) * radius;
+      const h0 = peaks[i], h1 = peaks[(i + 1) % segs];
+      pos.push(x0, -60, z0, x1, -60, z1, x1, h1, z1, x0, -60, z0, x1, h1, z1, x0, h0, z0);
+      for (const top of [0, 0, 1, 0, 1, 1]) { const c = top ? ct : cb; col.push(c.r, c.g, c.b); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide }));
+    m.renderOrder = -1;
+    return m;
+  }
+  const farRing = mountainRing(2200, 90, 380, 11, '#8a7aa0', '#d9a98e', 3);
+  const nearRing = mountainRing(1500, 40, 190, 23, '#6d7a63', '#c9a586', 5);
+  scene.add(farRing, nearRing);
+
+  /* ---------- textures ---------- */
+  function canvasTex(w, h, draw, repeat) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    if (repeat) { t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping; }
+    return t;
+  }
+  const roadTex = canvasTex(256, 512, (g, w, h) => {
+    g.fillStyle = '#4a4d55'; g.fillRect(0, 0, w, h);
+    const r = rng(5);
+    for (let i = 0; i < 9000; i++) { const v = 60 + r() * 50 | 0; g.fillStyle = 'rgba(' + v + ',' + v + ',' + (v + 6) + ',.55)'; g.fillRect(r() * w, r() * h, 1.5, 1.5); }
+    for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(36,38,44,.08)'; g.beginPath(); g.ellipse(w * (0.2 + r() * 0.6), r() * h, 10 + r() * 20, 40 + r() * 80, 0, 0, 7); g.fill(); }
+    g.fillStyle = '#ece6d8'; g.fillRect(w * 0.035, 0, w * 0.022, h); g.fillRect(w * 0.943, 0, w * 0.022, h);
+    g.fillRect(w * 0.492, 0, w * 0.016, h * 0.375);
+  }, true);
+  const roadMat = new THREE.MeshLambertMaterial({ map: roadTex });
+  const shoulderMat = new THREE.MeshLambertMaterial({ color: '#b49b73' });
+  const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+  const propMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const wireMat = new THREE.LineBasicMaterial({ color: '#2b2b30', transparent: true, opacity: 0.6 });
+
+  /* ---------- track: centre line sampled every 2 m ---------- */
+  function newTrack(seed, goal) {
+    T = { x: [0], y: [0], z: [0], h: [0], amp: [4], style: ['poplars'], rand: rng(seed), seed, goal, cur: 'poplars', road: ROADS[road] };
+    addSection(0, 60, 0, 0, 0);
+    ensureTrack(START_S + 600);
+  }
+  const AMP = { poplars: 3.5, fields: 4.5, orchard: 6, hill: 13 };
+  function pushSample(k, dy) {
+    const i = T.x.length - 1, h = T.h[i] + k;
+    T.h.push(h); T.x.push(T.x[i] + Math.sin(h) * STEP); T.z.push(T.z[i] - Math.cos(h) * STEP); T.y.push(T.y[i] + dy);
+    T.amp.push(lerp(T.amp[i], AMP[T.cur], 0.025)); T.style.push(T.cur);
+  }
+  function addSection(enter, hold, leave, k, dy) {
+    const total = enter + hold + leave; let prev = 0;
+    for (let n = 1; n <= total; n++) {
+      const kk = n <= enter ? k * n / enter : n <= enter + hold ? k : k * (1 - (n - enter - hold) / leave);
+      const yN = dy * (-Math.cos(n / total * Math.PI) / 2 + 0.5);
+      pushSample(kk, yN - prev); prev = yN;
+    }
+  }
+  function genSection() {
+    const RD = T.road, r = T.rand, i = T.x.length - 1, h = T.h[i], y = T.y[i], x = r();
+    if (x < RD.flat) { T.cur = r() < 0.55 ? 'poplars' : 'fields'; addSection(10, 30 + (r() * 60 | 0), 10, 0, (r() - 0.5) * 4 * RD.dy); return; }
+    if (x < RD.flat + RD.curve) {
+      let sign = r() < 0.5 ? -1 : 1; if (h > 0.6) sign = -1; if (h < -0.6) sign = 1;
+      T.cur = r() < 0.5 ? 'orchard' : 'fields';
+      addSection(20, 25 + (r() * 45 | 0), 20, sign * STEP / (RD.rMin + r() * RD.rSpan), (r() - 0.5) * 8 * RD.dy);
+      return;
+    }
+    const len = 70 + (r() * 140 | 0), g = RD.g0 + r() * (RD.g1 - RD.g0);
+    let dir = r() < 0.5 ? 1 : -1; if (y > 45) dir = -1; if (y < -20) dir = 1;
+    let k = r() < 0.4 ? (r() - 0.5) * STEP / 260 : 0;
+    if (h > 0.6) k = -Math.abs(k); if (h < -0.6) k = Math.abs(k);
+    T.cur = dir > 0 ? 'hill' : 'fields';
+    addSection(len * 0.25 | 0, len * 0.5 | 0, len * 0.25 | 0, k, dir * g * len * STEP);
+  }
+  function ensureTrack(s) { while ((T.x.length - 2) * STEP < s) genSection(); }
+  const P = { x: 0, y: 0, z: 0, h: 0, g: 0 };
+  function at(s, lat, out) {
+    out = out || P;
+    ensureTrack(s + 6);
+    const f = Math.max(0, s / STEP), i = Math.floor(f), t = f - i;
+    const h = lerp(T.h[i], T.h[i + 1], t);
+    out.x = lerp(T.x[i], T.x[i + 1], t) + Math.cos(h) * lat;
+    out.z = lerp(T.z[i], T.z[i + 1], t) + Math.sin(h) * lat;
+    out.y = lerp(T.y[i], T.y[i + 1], t);
+    out.h = h; out.g = (T.y[i + 1] - T.y[i]) / STEP;
+    return out;
+  }
+
+  /* ---------- terrain colours ---------- */
+  const C = s => new THREE.Color(s);
+  const CROPS = [C('#cdb05e'), C('#7f9a45'), C('#8f6e4d'), C('#a9a263'), C('#d7b440'), C('#6f8a3c')];
+  const VERGE = C('#74873a'), DRY = C('#9d9767'), ROCKY = C('#8c8a6c');
+  function groundColor(o, wx, wz, style, hgt, out) {
+    const a = Math.abs(o);
+    if (a < 16) { out.copy(VERGE).offsetHSL(0, 0, (noise2(wx * 0.2, wz * 0.2) - 0.5) * 0.06); return out; }
+    if (style === 'hill' && hgt > 6) { out.copy(noise2(wx * 0.05, wz * 0.05) > 0.5 ? DRY : ROCKY); return out; }
+    const cx = Math.floor((wx + noise2(wx * 0.01, wz * 0.01) * 30) / 55), cz = Math.floor((wz + noise2(wz * 0.01, wx * 0.01) * 30) / 55);
+    out.copy(CROPS[Math.floor(hash2(cx, cz) * CROPS.length)]).offsetHSL(0, 0, (noise2(wx * 0.08, wz * 0.08) - 0.5) * 0.05);
+    return out;
+  }
+  const OFFS = [-140, -95, -62, -40, -24, -13, -7, -4.75, 0, 4.75, 7, 13, 24, 40, 62, 95, 140];
+  function groundH(o, wx, wz, amp) {
+    const a = Math.abs(o);
+    if (a < 1) return -0.4;
+    if (a < 5) return -0.08;
+    const n = noise2(wx * 0.007, wz * 0.007) * 0.75 + noise2(wx * 0.025, wz * 0.025) * 0.25;
+    return -0.08 + smooth(6, 70, a) * amp * (0.35 + n);
+  }
+
+  /* ---------- prop prototypes (merged geometry with vertex colours) ---------- */
+  function part(geo, color, tx, ty, tz, sx, sy, sz, ry) {
+    const g = geo.index ? geo.toNonIndexed() : geo.clone();
+    g.scale(sx || 1, sy || 1, sz || 1); if (ry) g.rotateY(ry); g.translate(tx || 0, ty || 0, tz || 0);
+    const c = new THREE.Color(color), n = g.attributes.position.count, cols = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    g.deleteAttribute('uv');
+    return g;
+  }
+  function merge(parts) {
+    let n = 0; for (const p of parts) n += p.attributes.position.count;
+    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    let o = 0;
+    for (const p of parts) { pos.set(p.attributes.position.array, o * 3); nor.set(p.attributes.normal.array, o * 3); col.set(p.attributes.color.array, o * 3); o += p.attributes.position.count; }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.computeBoundingSphere();
+    return g;
+  }
+  const ico = d => new THREE.IcosahedronGeometry(1, d || 0);
+  const cyl = (rt, rb, s) => new THREE.CylinderGeometry(rt, rb, 1, s || 6);
+  const box = () => new THREE.BoxGeometry(1, 1, 1);
+  const PROTO = {
+    poplar: merge([part(cyl(0.14, 0.2), '#5a4630', 0, 1, 0, 1, 2, 1), part(ico(1), '#4b6a2c', 0, 6.2, 0, 1.05, 5, 1.05), part(ico(0), '#5f7f34', 0.2, 7.5, 0.25, 0.7, 3, 0.7)]),
+    tree: merge([part(cyl(0.22, 0.32), '#5b4631', 0, 1.4, 0, 1, 2.8, 1), part(ico(1), '#4e6b2e', 0, 4.4, 0, 2.6, 2.1, 2.6), part(ico(0), '#64843a', 1.2, 4.9, 0.6, 1.7, 1.5, 1.7), part(ico(0), '#56752f', -1.1, 4.1, -0.7, 1.6, 1.4, 1.6)]),
+    bush: merge([part(ico(0), '#5e7231', 0, 0.5, 0, 1.1, 0.7, 1.1), part(ico(0), '#6c823a', 0.7, 0.45, 0.3, 0.8, 0.6, 0.8)]),
+    rock: merge([part(new THREE.DodecahedronGeometry(1, 0), '#9a8f80', 0, 0.3, 0, 1.2, 0.7, 0.9)]),
+    bale: merge([part(new THREE.CylinderGeometry(0.75, 0.75, 1.2, 10).rotateZ(Math.PI / 2), '#d6b75e', 0, 0.75, 0)]),
+    post: merge([part(box(), '#6b5338', 0, 0.6, 0, 0.12, 1.2, 0.12)]),
+    rail: merge([part(box(), '#7a5f40', 0, 0.85, 0, 0.06, 0.08, 4.1), part(box(), '#7a5f40', 0, 0.45, 0, 0.06, 0.08, 4.1)]),
+    pole: merge([part(cyl(0.11, 0.15), '#6a5845', 0, 4.5, 0, 1, 9, 1), part(box(), '#5a4b3a', 0, 8.6, 0, 1.8, 0.12, 0.12)]),
+    house: merge([part(box(), '#efe7d6', 0, 1.6, 0, 8, 3.2, 6), part(new THREE.CylinderGeometry(0.01, 1, 1, 4, 1).rotateY(Math.PI / 4), '#b5533a', 0, 4.1, 0, 6.4, 1.8, 4.9), part(box(), '#5a4636', 1.5, 1.0, 3.01, 1.1, 2.0, 0.05), part(box(), '#4d6a87', -2, 1.9, 3.01, 1.2, 1.0, 0.05)]),
+    kmpost: null
+  };
+  const SHADOWS = { poplar: true, tree: true, house: true, pole: true, bale: true };
+
+  /* ---------- chunks ---------- */
+  const chunks = new Map();
+  const tmpC = new THREE.Color(), tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+  function ribbon(i0, i1, o0, o1, dy, vRepeat) {
+    const pos = [], uv = [], idx = [];
+    for (let i = i0; i <= i1; i++) {
+      const h = T.h[i], cx = Math.cos(h), cz = Math.sin(h);
+      pos.push(T.x[i] + cx * o0, T.y[i] + dy, T.z[i] + cz * o0, T.x[i] + cx * o1, T.y[i] + dy, T.z[i] + cz * o1);
+      const v = i * STEP / (vRepeat || 8); uv.push(0, v, 1, v);
+      if (i < i1) { const a = (i - i0) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    return g;
+  }
+  function terrain(i0, i1) {
+    const pos = [], col = [], idx = [], W = OFFS.length;
+    for (let i = i0; i <= i1; i++) {
+      const h = T.h[i], cx = Math.cos(h), cz = Math.sin(h);
+      for (let j = 0; j < W; j++) {
+        const o = OFFS[j], wx = T.x[i] + cx * o, wz = T.z[i] + cz * o, gh = groundH(o, wx, wz, T.amp[i]);
+        pos.push(wx, T.y[i] + gh, wz);
+        groundColor(o, wx, wz, T.style[i], gh, tmpC); col.push(tmpC.r, tmpC.g, tmpC.b);
+      }
+      if (i < i1) for (let j = 0; j < W - 1; j++) { const a = (i - i0) * W + j; idx.push(a, a + 1, a + W, a + 1, a + W + 1, a + W); }
+    }
+    /* skirts down from the outer edges so the far rim never shows a gap */
+    const base = pos.length / 3;
+    for (let i = i0; i <= i1; i++) for (const j of [0, W - 1]) {
+      const k = ((i - i0) * W + j) * 3; pos.push(pos[k], pos[k + 1] - 40, pos[k + 2]); col.push(col[k], col[k + 1], col[k + 2]);
+    }
+    for (let i = i0; i < i1; i++) {
+      const r = i - i0, L0 = r * W, L1 = (r + 1) * W, s0 = base + r * 2, s1 = base + (r + 1) * 2;
+      idx.push(L0, s0, L1, L1, s0, s1);
+      idx.push(L0 + W - 1, L1 + W - 1, s0 + 1, L1 + W - 1, s1 + 1, s0 + 1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    return g;
+  }
+  function propY(i, lat) {
+    const h = T.h[i], wx = T.x[i] + Math.cos(h) * lat, wz = T.z[i] + Math.sin(h) * lat;
+    return T.y[i] + groundH(lat, wx, wz, T.amp[i]) - 0.15;
+  }
+  function scatter(c, i0, i1) {
+    const r = rng(T.seed + c * 7919), list = {};
+    const add = (k, i, lat, s, ry, sy) => {
+      const h = T.h[i];
+      (list[k] || (list[k] = [])).push([T.x[i] + Math.cos(h) * lat, propY(i, lat), T.z[i] + Math.sin(h) * lat, s, ry === undefined ? r() * 6.28 : ry, sy || s]);
+    };
+    const poleSide = r() < 0.5 ? -1 : 1;
+    for (let i = i0; i < i1; i++) {
+      const st = T.style[i], side = () => (r() < 0.5 ? -1 : 1);
+      if (st === 'poplars' && i % 6 === 0) { add('poplar', i, -8.5 - r(), 0.9 + r() * 0.3); add('poplar', i, 8.5 + r(), 0.9 + r() * 0.3); }
+      if (st === 'orchard' && i % 5 === 0) for (const s of [-1, 1]) for (let q = 0; q < 3; q++) if (r() < 0.8) add('tree', i, s * (16 + q * 9 + r() * 2), 0.55 + r() * 0.2);
+      if (st === 'fields') {
+        if (i % 2 === 0) { add('post', i, 6.4 * poleSide, 1, -T.h[i]); if (i % 2 === 0 && i + 2 <= i1) add('rail', i + 1, 6.4 * poleSide, 1, -T.h[i + 1], 1); }
+        if (r() < 0.03) add('bale', i, side() * (18 + r() * 50), 1, r() * 6.28);
+      }
+      if (i % 25 === 0) add('pole', i, -7.8 * poleSide, 1, -T.h[i]);
+      if (r() < (st === 'hill' ? 0.07 : 0.035)) add('tree', i, side() * (12 + r() * 70), 0.7 + r() * 0.6);
+      if (r() < 0.06) add('bush', i, side() * (6 + r() * 14), 0.6 + r() * 0.9);
+      if (r() < (st === 'hill' ? 0.08 : 0.02)) add('rock', i, side() * (6 + r() * 30), 0.5 + r() * 1.4);
+      if (r() < 0.02) add('poplar', i, side() * (20 + r() * 80), 0.8 + r() * 0.4);
+    }
+    if (r() < 0.55) { const i = i0 + (r() * (i1 - i0) | 0); add('house', i, (r() < 0.5 ? -1 : 1) * (32 + r() * 50), 0.9 + r() * 0.3, -T.h[i] + (r() - 0.5) * 0.6); }
+    return list;
+  }
+  function wires(i0, i1, list) {
+    const poles = list.pole || []; if (poles.length < 2) return null;
+    const pts = [];
+    for (let k = 0; k < poles.length - 1; k++) {
+      const a = poles[k], b = poles[k + 1];
+      for (const dx of [-0.75, 0.75]) {
+        for (let s = 0; s < 8; s++) {
+          const t0 = s / 8, t1 = (s + 1) / 8, sag = t => 8.6 - Math.sin(t * Math.PI) * 0.9;
+          pts.push(lerp(a[0], b[0], t0) + dx * Math.cos(a[4]), lerp(a[1], b[1], t0) + sag(t0), lerp(a[2], b[2], t0) - dx * Math.sin(a[4]));
+          pts.push(lerp(a[0], b[0], t1) + dx * Math.cos(a[4]), lerp(a[1], b[1], t1) + sag(t1), lerp(a[2], b[2], t1) - dx * Math.sin(a[4]));
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return new THREE.LineSegments(g, wireMat);
+  }
+  function buildChunk(c) {
+    const i0 = c * CHUNK, i1 = i0 + CHUNK;
+    ensureTrack(i1 * STEP + 10);
+    const grp = new THREE.Group();
+    const own = [];
+    const mk = (geo, mat, shadow) => { const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.castShadow = !!shadow; own.push(geo); grp.add(m); return m; };
+    mk(ribbon(i0, i1, -ROAD_HALF, ROAD_HALF, 0, 8), roadMat);
+    mk(ribbon(i0, i1, -ROAD_HALF - SHOULDER, -ROAD_HALF, -0.025), shoulderMat);
+    mk(ribbon(i0, i1, ROAD_HALF, ROAD_HALF + SHOULDER, -0.025), shoulderMat);
+    mk(terrain(i0, i1), groundMat);
+    const list = scatter(c, i0, i1);
+    for (const k in list) {
+      const items = list[k], im = new THREE.InstancedMesh(PROTO[k], propMat, items.length);
+      items.forEach((it, n) => {
+        tmpQ.setFromAxisAngle(UP, it[4]); tmpS.set(it[3], it[5], it[3]); tmpP.set(it[0], it[1], it[2]);
+        im.setMatrixAt(n, tmpM.compose(tmpP, tmpQ, tmpS));
+      });
+      im.castShadow = !!SHADOWS[k]; im.receiveShadow = true;
+      im.computeBoundingSphere();
+      grp.add(im);
+    }
+    const w = wires(i0, i1, list); if (w) { own.push(w.geometry); grp.add(w); }
+    /* km posts */
+    for (let i = i0; i < i1; i++) {
+      const m1 = i * STEP - START_S, m2 = (i + 1) * STEP - START_S;
+      if (m2 > 0 && Math.floor(m2 / 1000) > Math.floor(m1 / 1000)) { const km = Math.floor(m2 / 1000); if (!(isFinite(T.goal) && km * 1000 >= T.goal)) grp.add(kmPost(i, km)); }
+    }
+    scene.add(grp);
+    chunks.set(c, { grp, own });
+  }
+  function dropChunk(c) {
+    const ch = chunks.get(c); if (!ch) return;
+    scene.remove(ch.grp);
+    ch.grp.traverse(o => { if (o.isInstancedMesh) o.dispose(); if (o.userData.tex) o.userData.tex.dispose(); });
+    for (const g of ch.own) g.dispose();
+    chunks.delete(c);
+  }
+  function updateChunks(s) {
+    const lo = Math.max(0, Math.floor((s - BEHIND) / STEP / CHUNK)), hi = Math.floor((s + AHEAD) / STEP / CHUNK);
+    for (const c of [...chunks.keys()]) if (c < lo || c > hi) dropChunk(c);
+    let built = 0;
+    for (let c = lo; c <= hi; c++) if (!chunks.has(c)) { buildChunk(c); if (++built >= 2 && chunks.size > 2) break; }
+  }
+  function clearChunks() { for (const c of [...chunks.keys()]) dropChunk(c); }
+
+  /* ---------- signs: km posts, start and finish arches ---------- */
+  const signMat = {};
+  function kmPost(i, km) {
+    const g = new THREE.Group(), h = T.h[i];
+    const tex = canvasTex(128, 160, (c, w, hh) => {
+      c.fillStyle = '#f4f1ea'; c.fillRect(0, 0, w, hh); c.fillStyle = '#c4452f'; c.fillRect(0, 0, w, 30);
+      c.fillStyle = '#1d2333'; c.textAlign = 'center'; c.font = '600 84px Teko, sans-serif'; c.fillText(String(km), w / 2, 118);
+      c.font = '700 22px "Barlow Semi Condensed", sans-serif'; c.fillText('KM', w / 2, 150);
+    });
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.7), new THREE.MeshLambertMaterial({ map: tex }));
+    plate.position.set(0, 1.0, 0); plate.rotation.y = 0.35;
+    plate.userData.tex = tex;
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, 0.1), new THREE.MeshLambertMaterial({ color: '#d8d2c4' }));
+    post.position.y = 0.4;
+    g.add(plate, post);
+    g.position.set(T.x[i] + Math.cos(h) * 5.6, T.y[i], T.z[i] + Math.sin(h) * 5.6);
+    g.rotation.y = -h;
+    return g;
+  }
+  function arch(text, color) {
+    const g = new THREE.Group();
+    const poleM = new THREE.MeshLambertMaterial({ color: '#2b2e36' });
+    for (const x of [-5.4, 5.4]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 6, 8), poleM); p.position.set(x, 3, 0); p.castShadow = true; g.add(p); }
+    const tex = canvasTex(1024, 128, (c, w, h) => {
+      if (color) { c.fillStyle = color; c.fillRect(0, 0, w, h); }
+      else { const n = 32, cw = w / n; for (let i = 0; i < n; i++) for (let j = 0; j < 2; j++) { c.fillStyle = (i + j) % 2 ? '#15161a' : '#f4f1ea'; c.fillRect(i * cw, j * h / 2, cw + 1, h / 2 + 1); } c.fillStyle = '#f4f1ea'; c.fillRect(w * 0.36, 0, w * 0.28, h); }
+      c.fillStyle = color ? '#ffffff' : '#15161a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '600 110px Teko, sans-serif'; c.fillText(text, w / 2, h * 0.58);
+    });
+    const banner = new THREE.Mesh(new THREE.BoxGeometry(11, 1.3, 0.2), new THREE.MeshLambertMaterial({ map: tex }));
+    banner.position.y = 5.6; banner.castShadow = true; g.add(banner);
+    return g;
+  }
+  let startArch = null, finishArch = null;
+  function placeArch(a, s) { const p = at(s, 0); a.position.set(p.x, p.y, p.z); a.rotation.y = -p.h; }
+  function disposeObj(o) { if (!o) return; scene.remove(o); o.traverse(m => { if (m.geometry) m.geometry.dispose(); if (m.material && m.material.map) m.material.map.dispose(); }); }
+
+  /* ---------- cyclists ---------- */
+  const matCache = {};
+  const LM = c => matCache[c] || (matCache[c] = new THREE.MeshLambertMaterial({ color: c }));
+  const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 10);
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vD = new THREE.Vector3();
+  function between(m, a, b, r) {
+    vD.subVectors(b, a); const len = vD.length() || 0.001;
+    m.position.addVectors(a, b).multiplyScalar(0.5);
+    m.scale.set(r, len, r);
+    m.quaternion.setFromUnitVectors(UP, vD.divideScalar(len));
+  }
+  function tube(g, mat, a, b, r) { const m = new THREE.Mesh(unitCyl, mat); between(m, new THREE.Vector3(...a), new THREE.Vector3(...b), r); m.castShadow = true; g.add(m); return m; }
+  function makeWheel(mat) {
+    const w = new THREE.Group();
+    const tyre = new THREE.Mesh(new THREE.TorusGeometry(0.335, 0.022, 6, 28), mat); tyre.rotation.y = Math.PI / 2; tyre.castShadow = true; w.add(tyre);
+    const spokeM = LM('#9a9ea8');
+    for (let k = 0; k < 4; k++) { const s = new THREE.Mesh(unitCyl, spokeM); s.scale.set(0.006, 0.66, 0.006); s.rotation.x = k * Math.PI / 4; w.add(s); }
+    const hub = new THREE.Mesh(unitCyl, spokeM); hub.scale.set(0.03, 0.08, 0.03); hub.rotation.z = Math.PI / 2; w.add(hub);
+    return w;
+  }
+  function makeCyclist(col, name) {
+    const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+    const dark = LM('#1c1d22'), frame = LM(col.frame), skin = LM('#c98f6b'), jersey = LM(col.jersey), shorts = LM('#1b1d23'), helmet = LM(col.helmet), shoe = LM('#efeee9');
+    const rw = makeWheel(dark); rw.position.set(0, 0.34, 0.41);
+    const fw = makeWheel(dark); fw.position.set(0, 0.34, -0.6);
+    body.add(rw, fw);
+    const R_ = [0, 0.34, 0.41], BB = [0, 0.28, 0], S = [0, 0.84, 0.17], Ht = [0, 0.82, -0.5], Hb = [0, 0.64, -0.55], F = [0, 0.34, -0.6];
+    tube(body, frame, BB, S, 0.022); tube(body, frame, S, Ht, 0.02); tube(body, frame, BB, Hb, 0.025); tube(body, frame, Hb, Ht, 0.024);
+    tube(body, frame, R_, BB, 0.014); tube(body, frame, R_, S, 0.012); tube(body, frame, Hb, F, 0.018);
+    tube(body, dark, S, [0, 0.93, 0.21], 0.014); tube(body, dark, Ht, [0, 0.9, -0.56], 0.018);
+    tube(body, dark, [-0.21, 0.9, -0.57], [0.21, 0.9, -0.57], 0.014);
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.045, 0.26), dark); saddle.position.set(0, 0.955, 0.2); body.add(saddle);
+    /* rider: torso, head, arms */
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.36, 4, 10), jersey);
+    between(torso, new THREE.Vector3(0, 1.04, 0.16), new THREE.Vector3(0, 1.35, -0.24), 1); torso.scale.set(1.2, 1, 0.85); torso.castShadow = true; body.add(torso);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), skin); head.position.set(0, 1.5, -0.38); body.add(head);
+    const hel = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), helmet); hel.position.set(0, 1.52, -0.36); hel.scale.set(1, 0.9, 1.3); hel.rotation.x = -0.25; hel.castShadow = true; body.add(hel);
+    for (const sx of [-1, 1]) {
+      tube(body, jersey, [sx * 0.17, 1.35, -0.23], [sx * 0.2, 1.2, -0.36], 0.05);
+      tube(body, skin, [sx * 0.2, 1.2, -0.36], [sx * 0.21, 1.1, -0.45], 0.04);
+      tube(body, skin, [sx * 0.21, 1.1, -0.45], [sx * 0.21, 0.92, -0.56], 0.035);
+    }
+    /* legs, crank: animated */
+    const legs = [-1, 1].map(sx => ({
+      sx, thigh: tube(body, shorts, [0, 1, 0], [0, 0.5, 0], 0.07), shin: tube(body, skin, [0, 0.5, 0], [0, 0.2, 0], 0.05),
+      foot: (() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.24), shoe); m.castShadow = true; body.add(m); return m; })(),
+      crank: tube(body, dark, [0, 0.28, 0], [0, 0.45, 0], 0.012)
+    }));
+    let label = null;
+    if (name) {
+      const tex = canvasTex(256, 64, (c, w, h) => {
+        c.font = '700 40px "Barlow Semi Condensed", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.lineWidth = 8; c.strokeStyle = 'rgba(12,14,20,.8)'; c.strokeText(name, w / 2, h / 2); c.fillStyle = '#f3ead8'; c.fillText(name, w / 2, h / 2);
+      });
+      label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, fog: false }));
+      label.scale.set(1.3, 0.33, 1); label.position.set(0, 2.05, 0); g.add(label);
+    }
+    scene.add(g);
+    return { g, body, rw, fw, legs, label, torso };
+  }
+  const hip = new THREE.Vector3(), knee = new THREE.Vector3(), foot = new THREE.Vector3(), bb = new THREE.Vector3();
+  function poseCyclist(c, crank, wheelRot) {
+    c.rw.rotation.x = c.fw.rotation.x = -wheelRot;
+    c.body.rotation.z = Math.sin(crank) * 0.03;
+    for (const L of c.legs) {
+      const ph = crank + (L.sx < 0 ? 0 : Math.PI);
+      const pz = -0.17 * Math.sin(ph), py = 0.28 + 0.17 * Math.cos(ph);
+      bb.set(L.sx * 0.11, 0.28, 0); foot.set(L.sx * 0.12, py + 0.05, pz + 0.02);
+      between(L.crank, bb, vA.set(L.sx * 0.11, py, pz), 0.012);
+      hip.set(L.sx * 0.1, 1.0, 0.17);
+      const dz = foot.z - hip.z, dy = foot.y - hip.y, d = Math.min(Math.hypot(dz, dy), 0.885), L1 = 0.45, L2 = 0.44;
+      const a = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1)), base = Math.atan2(dy, dz);
+      const ang = base + a;                          // knee bends forward (towards -z)
+      knee.set(L.sx * 0.115, hip.y + Math.sin(ang) * L1, hip.z + Math.cos(ang) * L1);
+      if (knee.z > hip.z + Math.cos(base - a) * L1) knee.set(L.sx * 0.115, hip.y + Math.sin(base - a) * L1, hip.z + Math.cos(base - a) * L1);
+      between(L.thigh, hip, knee, 0.072);
+      between(L.shin, knee, foot, 0.05);
+      L.foot.position.set(L.sx * 0.12, py + 0.03, pz - 0.03);
+    }
+  }
+  function placeCyclist(c, s, lat) {
+    const p = at(s, lat);
+    c.g.position.set(p.x, p.y, p.z);
+    c.g.rotation.set(Math.atan(p.g), -p.h, 0, 'YXZ');
+    return p;
+  }
+  let me = null, riders = [];
+  function rebuildRiders() {
+    for (const r of riders) { scene.remove(r.g); }
+    if (me) scene.remove(me.g);
+    me = makeCyclist(ME, null);
+    riders = R.rivals.map(rv => makeCyclist(RIVALS[rv.ci], rv.name));
+  }
+
+  /* ---------- runs ---------- */
+  function makeRivals(n, k, r) {
+    const bases = [7.6, 8.0, 8.35, 8.7, 9.05, 9.4, 9.8].slice(0, Math.max(n, 0));
+    for (let i = bases.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [bases[i], bases[j]] = [bases[j], bases[i]]; }
+    const pace = [0.93, 0.96, 0.98, 1.0, 1.02, 1.05, 1.08].slice(0, Math.max(n, 0));
+    for (let i = pace.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pace[i], pace[j]] = [pace[j], pace[i]]; }
+    return bases.map((b, i) => ({
+      name: RIVALS[i].name, ci: i, d: 12 + i * 11, v: 0, base: b * k, gsK: pace[i],
+      x: i % 2 ? 0.5 : LANE_R, f: 0.05 + r() * 0.07, p: r() * 6.28, phase: r() * 6.28, wheel: 0, finishT: 0, wasAhead: true
+    }));
+  }
+  function newRun(kind) {
+    const m = MODES[kind], seed = (Math.random() * 1e9) | 0, r2 = rng(seed ^ 0x5bd1e995);
+    clearChunks();
+    newTrack(seed, m.goal);
+    R = {
+      kind, goal: m.goal, d: 0, v: kind === 'attract' ? 6.5 : 0, t: 0, clock: 0, px: LANE_R, phase: 0, wheel: 0,
+      gs: gs && kind !== 'attract' && kind !== 'free', road, flatPace: 8.7 * DIFFS[diff].k,
+      rivals: makeRivals(m.rivals, kind === 'attract' ? 0.78 : DIFFS[diff].k, r2),
+      rank: 0, moving: 0, rpmInt: 0, maxRpm: 0, maxV: 0, climb: 0, lastY: 0, grade: 0,
+      finished: false, finishT: 0, finalRank: 0, savedD: 0, postT: 0, readyT: 0, countT: 0, lastBeep: 0,
+      sprint: null, nextSprint: 90, sprints: { done: 0, won: 0 }, hill: 0, last500: false, lastKm: 0
+    };
+    if (kind === 'attract') R.rivals.forEach(rv => { rv.d -= 6; rv.v = rv.base; });
+    disposeObj(startArch); disposeObj(finishArch); startArch = finishArch = null;
+    if (kind !== 'attract') { startArch = arch('BAŞLANGIÇ', '#2a9d8f'); placeArch(startArch, START_S + 20); scene.add(startArch); }
+    if (isFinite(m.goal)) { finishArch = arch('BİTİŞ', null); placeArch(finishArch, START_S + m.goal); scene.add(finishArch); }
+    rebuildRiders();
+    camReset = true;
+  }
+
+  /* ---------- input ---------- */
+  function readRpm(dt) {
+    if (keys.up) Input.kb = Math.min(keys.fast ? 118 : 90, Input.kb + 90 * dt);
+    else Input.kb = Math.max(0, Input.kb - 130 * dt);
+    const fresh = performance.now() - Input.at < 2000;
+    const target = Math.max(Input.kb, fresh ? Input.sensor : 0);
+    Input.shown += (target - Input.shown) * Math.min(1, dt * 7);
+    if (target === 0 && Input.shown < 1) Input.shown = 0;
+    return Input.shown;
+  }
+  function onSensor(d) {
+    if (!d || typeof d !== 'object' || d.h) return;
+    if (d.c) { handleCmd(d); return; }
+    Input.sensor = clamp(+d.r || 0, 0, 220); Input.q = +d.q || 0; Input.src = String(d.s || '').slice(0, 20); Input.at = performance.now();
+  }
+
+  /* ---------- phone remote ---------- */
+  const seenCmd = [];
+  function handleCmd(d) {
+    const id = String(d.id || '');
+    if (!id || seenCmd.includes(id)) return;          // the same command arrives over up to three paths
+    seenCmd.push(id); if (seenCmd.length > 40) seenCmd.shift();
+    if (d.diff != null) { diff = clamp(d.diff | 0, 0, 2); store.set('diff', diff); }
+    if (d.road && ROADS[d.road]) { road = d.road; store.set('road', road); }
+    if (d.gs != null) { gs = !!d.gs; store.set('gs', gs); }
+    markLobby();
+    switch (d.a) {
+      case 'start': if (MODES[d.mode] && d.mode !== 'attract' && (state === 'attract' || state === 'results' || state === 'ready')) pick(d.mode); break;
+      case 'go': if (state === 'ready') beginCount(); break;
+      case 'pause': pause(); break;
+      case 'resume': resume(); break;
+      case 'end': if (state === 'paused') showResults(); break;
+      case 'menu': if (state !== 'run' && state !== 'count') showLobby(); break;
+      case 'again': if (state === 'results') pick(R.kind); break;
+    }
+    pushState();
+  }
+  function pushState() {
+    const st = { h: 1, st: state, mode: modeKey, diff, road, gs: gs ? 1 : 0 };
+    relay.send(st); link.broadcast(st);
+  }
+
+  /* ---------- update ---------- */
+  const gradeAt = d => at(START_S + d, 0).g;
+  function update(dt) {
+    const rpm = readRpm(dt);
+    const animRpm = state === 'attract' ? 58 : rpm;
+    R.phase += animRpm / 60 * Math.PI * 2 * dt;
+    Sound.wind(state === 'run' || state === 'finish' ? R.v : 0);
+    switch (state) {
+      case 'attract': R.v = 6.5; advance(dt); rivalsStep(dt); break;
+      case 'ready':
+        if (rpm > 25) { R.readyT += dt; if (R.readyT > 0.6) beginCount(); } else R.readyT = Math.max(0, R.readyT - dt);
+        break;
+      case 'count': {
+        R.countT -= dt;
+        const n = Math.ceil(R.countT);
+        if (n !== R.lastBeep && n > 0) { R.lastBeep = n; bigMsg(String(n), '', 0); Sound.count(); }
+        if (R.countT <= 0) go();
+        break;
+      }
+      case 'run': physics(dt, rpm, false); break;
+      case 'finish': physics(dt, rpm, true); R.postT += dt; if (R.postT > 2.6) showResults(false); break;
+      case 'results': physics(dt, rpm, true); break;
+    }
+  }
+  function physics(dt, rpm, after) {
+    const grade = gradeAt(R.d);
+    R.grade = grade;
+    const pedal = rpm * MPS_PER_RPM * clamp(1 - grade * 7, 0.4, 1.6);
+    const coast = grade < -0.004 ? -grade * 140 : 0;
+    const target = Math.max(pedal, coast);
+    const k = target > R.v ? 1.5 : (rpm < 8 ? 0.35 : 0.8);
+    R.v = Math.max(0, R.v + (target - R.v) * Math.min(1, k * dt));
+    /* Game System learns the rider's pace as a flat-road equivalent, so hills don't count twice */
+    if (!after && R.t > 3 && rpm > 20) R.flatPace += (R.v / clamp(1 - grade * 7, 0.4, 1.6) - R.flatPace) * Math.min(1, dt / 20);
+    advance(dt);
+    R.clock += dt;
+    rivalsStep(dt);
+    if (after) return;
+    R.t += dt;
+    if (rpm > 20) { R.moving += dt; R.rpmInt += rpm * dt; }
+    R.maxRpm = Math.max(R.maxRpm, rpm); R.maxV = Math.max(R.maxV, R.v);
+    const y = at(START_S + R.d, 0).y;
+    if (y > R.lastY) R.climb += y - R.lastY;
+    R.lastY = y;
+    rankCheck(); hillCheck(grade); sprintStep(dt, rpm); journeySave(false);
+    if (isFinite(R.goal) && !R.last500 && R.goal - R.d < 500) { R.last500 = true; banner('Son 500 metre!', 'hot'); }
+    if (R.kind === 'free') { const km = Math.floor(R.d / 1000); if (km > R.lastKm) { R.lastKm = km; banner(km + '. kilometre', 'good'); } }
+    if (R.d >= R.goal) finish();
+  }
+  function advance(dt) {
+    R.d += R.v * dt;
+    R.wheel += R.v * dt / 0.34;
+    let tx = LANE_R;
+    for (const r of R.rivals) { const gap = r.d - R.d; if (gap > -3 && gap < 14 && R.v >= r.v - 0.3) { tx = LANE_L; break; } }
+    R.px += (tx - R.px) * Math.min(1, dt * 1.2);
+  }
+  function rivalsStep(dt) {
+    for (const r of R.rivals) {
+      const g = gradeAt(r.d);
+      let want = r.base;
+      if (R.gs && !r.finishT) {
+        /* Game System: ride at the player's own pace; whoever drifts too far gets pulled back */
+        want = Math.max(R.flatPace, 5) * r.gsK;
+        const gap = r.d - R.d;
+        if (gap > 25) want *= 1 - Math.min(0.22, (gap - 25) / 350);
+        else if (gap < -25) want *= 1 + Math.min(0.3, (-gap - 25) / 250);
+      }
+      want *= (1 + 0.05 * Math.sin(R.clock * r.f + r.p)) * clamp(1 - g * 6, 0.5, 1.5);
+      if (r.finishT) want *= 0.5;
+      r.v += (want - r.v) * Math.min(1, dt * 0.7);
+      r.d += r.v * dt;
+      r.wheel += r.v * dt / 0.34;
+      r.phase += r.v / MPS_PER_RPM / 60 * Math.PI * 2 * dt;
+      if (!r.finishT && isFinite(R.goal) && r.d >= R.goal) r.finishT = R.clock;
+    }
+  }
+  function rankCheck() {
+    const passed = [], by = [];
+    for (const r of R.rivals) {
+      if (r.wasAhead && r.d < R.d - 1) { r.wasAhead = false; passed.push(r.name); }
+      else if (!r.wasAhead && r.d > R.d + 1) { r.wasAhead = true; by.push(r.name); }
+    }
+    R.rank = 1 + R.rivals.filter(r => r.d > R.d).length;
+    if (passed.length) { banner('Geçtin: ' + passed.join(', '), 'good'); Sound.pass(); }
+    if (by.length) { banner(by.join(', ') + ' seni geçti', 'warn'); Sound.passed(); }
+  }
+  function hillCheck(g) {
+    if (g > 0.028 && R.hill !== 1) { R.hill = 1; banner('Yokuş başlıyor · direnci biraz artır', 'hot'); }
+    else if (g < -0.028 && R.hill !== -1) { R.hill = -1; banner('İniş · nefeslen', 'good'); }
+    else if (Math.abs(g) < 0.008) R.hill = 0;
+  }
+  function sprintStep(dt, rpm) {
+    if (R.kind !== 'free') return;
+    if (!R.sprint) {
+      if (R.t >= R.nextSprint) {
+        const avg = R.moving > 20 ? R.rpmInt / R.moving : 75;
+        const target = Math.max(80, Math.round(avg * 1.15 / 5) * 5);
+        R.sprint = { left: 15, ok: 0, target };
+        banner('Sprint! 15 sn boyunca ' + target + '+ rpm', 'hot'); Sound.sprint();
+      }
+      return;
+    }
+    const s = R.sprint;
+    s.left -= dt; if (rpm >= s.target) s.ok += dt;
+    if (s.left <= 0) {
+      const won = s.ok >= 10;
+      R.sprints.done++; if (won) R.sprints.won++;
+      banner(won ? 'Sprint tamam!' : 'Sprint kaçtı, sıradakinde', won ? 'good' : 'warn');
+      if (won) Sound.win(); else Sound.passed();
+      R.sprint = null; R.nextSprint = R.t + 100 + Math.random() * 80;
+    }
+  }
+  function journeySave(force) {
+    if (!R || R.kind === 'attract') return;
+    const dKm = (R.d - R.savedD) / 1000;
+    if (!force && dKm < 0.25) return;
+    if (dKm > 0) { store.set('journey', store.get('journey', 0) + dKm); R.savedD = R.d; }
+  }
+
+  /* ---------- state changes ---------- */
+  function pick(kind) {
+    Sound.ensure();
+    modeKey = kind; store.set('mode', kind);
+    newRun(kind);
+    state = 'ready';
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    $('lobby').hidden = true; $('results').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
+    $('hRankBox').hidden = kind === 'free';
+    $('hField').textContent = R.rivals.length + 1;
+    bannerQ.length = 0; bannerT = 0; $('banner').hidden = true; $('sprint').hidden = true;
+    bigMsg('Pedal çevir', 'Pedal çevirince geri sayım başlar · ya da Enter', 0);
+  }
+  function beginCount() { state = 'count'; R.countT = 3; R.lastBeep = 0; }
+  function go() { state = 'run'; R.lastY = at(START_S, 0).y; bigMsg('Başla!', '', 0.9); Sound.go(); }
+  function finish() {
+    R.finished = true; R.finishT = R.t; R.finalRank = R.rank;
+    state = 'finish'; R.postT = 0;
+    bigMsg(R.finalRank === 1 ? 'Birinci!' : 'Bitiş', R.finalRank === 1 ? '' : R.finalRank + '. sıradasın', 0);
+    Sound.finish();
+  }
+  function pause() { if (state !== 'run') return; state = 'paused'; $('pause').hidden = false; $('pResume').focus(); }
+  function resume() { if (state !== 'paused') return; state = 'run'; $('pause').hidden = true; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+  function showLobby() {
+    journeySave(true);
+    newRun('attract'); state = 'attract';
+    $('lobby').hidden = false; $('hud').hidden = true; $('results').hidden = true; $('pause').hidden = true; $('bigmsg').hidden = true;
+    renderJourney(); markLobby();
+  }
+  function showResults() {
+    journeySave(true);
+    state = 'results';
+    $('pause').hidden = true; $('bigmsg').hidden = true; $('sprint').hidden = true; $('banner').hidden = true; bannerQ.length = 0;
+    const m = MODES[R.kind], t = R.finished ? R.finishT : R.t;
+    const avgRpm = R.moving > 0 ? R.rpmInt / R.moving : 0, avgV = t > 0 ? R.d / t : 0;
+    $('rKind').textContent = m.label + ' · ' + ROADS[R.road].name + ' yol' + (R.kind === 'free' ? '' : ' · ' + DIFFS[diff].name + (R.gs ? ' · Game System' : ''));
+    let title, note = '';
+    if (R.kind === 'free') title = 'Sürüş bitti';
+    else if (!R.finished) title = 'Yarış yarıda kaldı';
+    else {
+      title = R.finalRank === 1 ? 'Birinci geldin' : R.finalRank + '. oldun';
+      const key = 'best.' + R.kind + '.' + diff, best = store.get(key, 0);
+      if (!best || t < best) { store.set(key, t); note = best ? 'Yeni rekor! Eskisi ' + fmtTime(best) : 'İlk kaydın: ' + fmtTime(t); }
+      else note = 'Rekorun ' + fmtTime(best);
+    }
+    $('rTitle').textContent = title;
+    $('rNote').textContent = note; $('rNote').hidden = !note;
+    const rows = [
+      ['Süre', fmtTime(t), ''], ['Mesafe', fmtKm(R.d), 'km'], ['Ort. hız', fmt1(avgV * 3.6), 'km/sa'],
+      ['Ort. ritim', Math.round(avgRpm), 'rpm'], ['En yüksek', Math.round(R.maxRpm), 'rpm'], ['Tırmanış', Math.round(R.climb), 'm']
+    ];
+    if (R.kind === 'free') rows.push(['Sprint', R.sprints.won + '/' + R.sprints.done, '']);
+    const dl = $('rStats'); dl.textContent = '';
+    for (const [k, v, u] of rows) {
+      const d = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
+      dt.textContent = k; dd.textContent = v;
+      if (u) { const sm = document.createElement('small'); sm.textContent = u; dd.appendChild(sm); }
+      d.append(dt, dd); dl.appendChild(d);
+    }
+    const ol = $('rBoard'); ol.textContent = '';
+    ol.hidden = R.kind === 'free';
+    if (R.kind !== 'free') {
+      const field = R.rivals.map(r => ({ name: r.name, t: r.finishT, d: r.d, col: RIVALS[r.ci].jersey }));
+      field.push({ name: 'Sen', t: R.finished ? R.finishT : 0, d: R.d, col: ME.jersey, me: true });
+      field.sort((a, b) => (a.t && b.t) ? a.t - b.t : a.t ? -1 : b.t ? 1 : b.d - a.d);
+      for (const f of field) {
+        const li = document.createElement('li'), sw = document.createElement('i'), nm = document.createElement('span'), tm = document.createElement('span');
+        if (f.me) li.className = 'me';
+        sw.style.background = f.col; nm.textContent = f.name;
+        tm.textContent = f.t ? fmtTime(f.t) : 'bitişe ' + Math.max(0, Math.round(R.goal - f.d)) + ' m';
+        li.append(sw, nm, tm); ol.appendChild(li);
+      }
+    }
+    $('results').hidden = false; $('rAgain').focus();
+  }
+
+  /* ---------- banners ---------- */
+  const bannerQ = []; let bannerT = 0, bigT = 0;
+  function banner(text, tone) { if (bannerQ.length > 2) bannerQ.shift(); bannerQ.push({ text, tone }); }
+  function bannerStep(dt) {
+    const el = $('banner');
+    if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) el.hidden = true; return; }
+    const b = bannerQ.shift(); if (!b) return;
+    el.textContent = b.text; el.dataset.tone = b.tone; el.hidden = false;
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    bannerT = 2.6;
+  }
+  function bigMsg(t, sub, dur) { $('bigT').textContent = t; $('bigS').textContent = sub || ''; $('bigmsg').hidden = false; bigT = dur || 0; }
+
+  /* ---------- render ---------- */
+  let camReset = true;
+  const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), tgtPos = new THREE.Vector3(), tgtLook = new THREE.Vector3();
+  const pBehind = { x: 0, y: 0, z: 0, h: 0, g: 0 }, pAhead = { x: 0, y: 0, z: 0, h: 0, g: 0 };
+  function render(dt) {
+    const sMe = START_S + R.d;
+    updateChunks(sMe);
+    const p = placeCyclist(me, sMe, R.px);
+    poseCyclist(me, R.phase, R.wheel);
+    const px = p.x, py = p.y, pz = p.z;
+    R.rivals.forEach((r, i) => {
+      const c = riders[i];
+      placeCyclist(c, START_S + r.d, r.x);
+      poseCyclist(c, r.phase, r.wheel);
+      if (c.label) { const dd = Math.abs(r.d - R.d); c.label.visible = dd < 45 && dd > 2.5; }
+    });
+    /* chase camera */
+    const back = 5.4 + R.v * 0.06;
+    at(sMe - back, R.px * 0.8, pBehind); at(sMe + 9, R.px * 0.6, pAhead);
+    tgtPos.set(pBehind.x, Math.max(pBehind.y, py) + 2.15, pBehind.z);
+    tgtLook.set(pAhead.x, pAhead.y + 0.9, pAhead.z);
+    if (camReset) { camPos.copy(tgtPos); camLook.copy(tgtLook); camReset = false; }
+    const k = 1 - Math.exp(-dt * 7);
+    camPos.lerp(tgtPos, k); camLook.lerp(tgtLook, k);
+    camera.position.copy(camPos); camera.lookAt(camLook);
+    const fov = 58 + clamp(R.v * 3.6 - 15, 0, 40) * 0.22;
+    if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); }
+    sky.position.copy(camera.position);
+    farRing.position.set(camera.position.x, py - 30, camera.position.z);
+    nearRing.position.set(camera.position.x, py - 20, camera.position.z);
+    sun.position.set(px + SUN_DIR.x * 150, py + SUN_DIR.y * 150, pz + SUN_DIR.z * 150);
+    sun.target.position.set(px, py, pz);
+    renderer.render(scene, camera);
+  }
+  function resize() {
+    const w = Math.max(320, innerWidth), h = Math.max(240, innerHeight);
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+
+  /* ---------- HUD ---------- */
+  const cache = {};
+  function setText(id, v) { v = String(v); if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } }
+  function setAttr(id, a, v) { const k = id + '@' + a; v = String(v); if (cache[k] !== v) { cache[k] = v; $(id).setAttribute(a, v); } }
+  function hud() {
+    if (state === 'attract') { setText('liveRpm', Math.round(performance.now() - Input.at < 2500 ? Input.sensor : 0)); netView(); return; }
+    if (state === 'results') return;
+    const rpm = Input.shown;
+    setText('hSpeed', Math.round(R.v * 3.6));
+    setText('hRpm', Math.round(rpm));
+    setAttr('gVal', 'stroke-dasharray', (clamp(rpm / 140, 0, 1) * 100).toFixed(1) + ' 100');
+    setAttr('gVal', 'data-z', rpm < 60 ? 'low' : rpm > 100 ? 'hot' : 'ok');
+    if (R.kind === 'free') { setText('hDist', fmtKm(R.d)); setText('hDistLbl', 'km'); }
+    else { setText('hRank', R.rank || R.rivals.length + 1); setText('hDist', fmtKm(Math.min(R.d, R.goal))); setText('hDistLbl', '/ ' + R.goal / 1000 + ' km'); }
+    setText('hTime', fmtTime(R.finished ? R.finishT : R.t));
+    const gp = Math.round(R.grade * 100);
+    setText('hGrade', gp >= 1 ? 'Yokuş %' + gp : gp <= -1 ? 'İniş %' + (-gp) : 'Düz yol');
+    setAttr('hGrade', 'data-t', gp >= 1 ? 'up' : gp <= -1 ? 'down' : '');
+    const fresh = performance.now() - Input.at < 2500;
+    setText('hSrc', fresh ? 'Telefon' + (Input.sensor > 0 ? '' : ' · pedal bekleniyor') : Input.net === 'phone' ? 'Telefon · veri yok' : 'Klavye');
+    setAttr('hSrc', 'data-t', fresh ? 'phone' : '');
+    const sp = R.sprint;
+    $('sprint').hidden = !sp;
+    if (sp) { setText('sprintLbl', 'Sprint ' + sp.target + '+ rpm · ' + Math.ceil(sp.left) + ' sn'); $('sprintFill').style.width = clamp(sp.ok / 10 * 100, 0, 100) + '%'; }
+  }
+
+  /* ---------- lobby ---------- */
+  let code = cleanCode(store.get('code', '')) || newCode();
+  store.set('code', code);
+  const NET = {
+    wait: 'Kod hazırlanıyor…', ready: 'Telefon bekleniyor', phone: 'Telefon bağlı',
+    offline: 'İnternete ulaşılamıyor, yeniden deneniyor', nolib: 'Bağlantı kütüphanesi yüklenemedi, sayfayı yenile'
+  };
+  function onNet(s) { Input.net = s; }
+  function netView() {
+    let s = performance.now() - Input.at < 3000 || Input.net === 'phone' ? 'phone' : Input.net;
+    if (s !== 'phone' && relay.connected()) s = 'ready';
+    setText('netText', NET[s] || s); setAttr('netDot', 'data-s', s);
+    const PN = { wait: 'bekliyor', ready: 'hazır', phone: 'bağlı', offline: 'yok', nolib: 'yüklenemedi' };
+    const ago = Input.at ? Math.round((performance.now() - Input.at) / 1000) + ' sn önce' : 'yok';
+    setText('diag', 'Sürüm ' + VERSION + ' · sunucu ' + relay.count() + '/2 · doğrudan ' + (PN[Input.net] || Input.net) + ' · son telefon verisi ' + ago);
+  }
+  function renderPair() {
+    $('code').textContent = code;
+    const url = location.origin + location.pathname + '?k=' + code;
+    $('pairUrl').textContent = url.replace(/^https?:\/\//, '');
+    let svg = '';
+    try { if (window.qrcode) { const q = window.qrcode(0, 'M'); q.addData(url + '&v=' + VERSION); q.make(); svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } } catch (e) { svg = ''; }
+    $('qr').innerHTML = svg;
+    $('qr').hidden = !svg;
+    const local = location.protocol !== 'https:' || /^(localhost|127\.|\[::1\])/.test(location.hostname);
+    $('localNote').hidden = !local;
+  }
+  function markLobby() {
+    document.querySelectorAll('.mode').forEach(b => b.classList.toggle('sel', b.dataset.mode === modeKey));
+    document.querySelectorAll('#diff button').forEach(b => b.setAttribute('aria-checked', String(+b.dataset.diff === diff)));
+    document.querySelectorAll('#roadSel button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.road === road)));
+    const gb = $('gsBtn'); gb.setAttribute('aria-checked', String(gs)); gb.textContent = gs ? 'Açık' : 'Kapalı';
+  }
+  function renderJourney() {
+    const total = store.get('journey', 0), lap = Math.floor(total / ROUTE), km = total - lap * ROUTE;
+    const next = STOPS.find(s => s[1] > km + 1e-6);
+    $('jText').textContent = fmt1(km) + ' / ' + ROUTE + ' km' + (next ? ' · sıradaki durak ' + next[0] + ', ' + fmt1(next[1] - km) + ' km' : '') + (lap ? ' · ' + lap + '. tur tamam' : '');
+    $('jFill').style.width = (km / ROUTE * 100).toFixed(2) + '%';
+    const tr = $('jTrack');
+    tr.querySelectorAll('.j-stop').forEach(e => e.remove());
+    for (const [name, k] of STOPS) {
+      const st = document.createElement('span'), em = document.createElement('em');
+      st.className = 'j-stop' + (k <= km ? ' on' : ''); st.style.left = (k / ROUTE * 100) + '%';
+      em.textContent = name; st.appendChild(em); tr.appendChild(st);
+    }
+  }
+
+  document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => pick(b.dataset.mode)));
+  document.querySelectorAll('#diff button').forEach(b => b.addEventListener('click', () => { diff = +b.dataset.diff; store.set('diff', diff); markLobby(); pushState(); }));
+  document.querySelectorAll('#roadSel button').forEach(b => b.addEventListener('click', () => {
+    road = b.dataset.road; store.set('road', road); markLobby(); pushState();
+    if (state === 'attract') newRun('attract');
+  }));
+  $('gsBtn').addEventListener('click', () => { gs = !gs; store.set('gs', gs); markLobby(); pushState(); });
+  $('newCode').addEventListener('click', () => { code = newCode(); store.set('code', code); renderPair(); onNet('wait'); link.restart(); relay.retopic(); });
+  $('pResume').addEventListener('click', resume);
+  $('pEnd').addEventListener('click', () => showResults());
+  $('pMenu').addEventListener('click', showLobby);
+  $('rAgain').addEventListener('click', () => pick(R.kind));
+  $('rMenu').addEventListener('click', showLobby);
+
+  /* Keep the Mac display awake: during a ride nobody touches the keyboard */
+  let macWake = null;
+  function macAwake() {
+    if (!('wakeLock' in navigator) || macWake || document.hidden) return;
+    navigator.wakeLock.request('screen').then(l => { macWake = l; l.addEventListener('release', () => { macWake = null; }); }, () => {});
+  }
+  addEventListener('pointerdown', macAwake);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) macAwake(); });
+  macAwake();
+
+  const PEDAL_KEYS = ['ArrowUp', ' ', 'w', 'W'];
+  addEventListener('keydown', e => {
+    Sound.ensure(); macAwake();
+    const inGame = state !== 'attract' && state !== 'results' && state !== 'paused';
+    if (PEDAL_KEYS.includes(e.key) && inGame) { keys.up = true; e.preventDefault(); }
+    if (e.key === 'Shift') keys.fast = true;
+    if (e.repeat) return;
+    if (e.key === 'Escape') {
+      if (state === 'run') pause(); else if (state === 'paused') resume();
+      else if (state === 'ready' || state === 'count' || state === 'results') showLobby();
+    } else if (e.key === 'Enter') {
+      if (state === 'ready') { e.preventDefault(); beginCount(); }
+      else if (state === 'results' && document.activeElement === document.body) pick(R.kind);
+    } else if (e.key === 'm' || e.key === 'M') Sound.toggle();
+    else if (state === 'attract' && ['1', '2', '3'].includes(e.key)) pick(['race3', 'race10', 'free'][+e.key - 1]);
+  });
+  addEventListener('keyup', e => { if (PEDAL_KEYS.includes(e.key)) keys.up = false; if (e.key === 'Shift') keys.fast = false; });
+  addEventListener('blur', () => { keys.up = false; keys.fast = false; });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+  addEventListener('pagehide', () => journeySave(true));
+  addEventListener('resize', resize);
+
+  resize();
+  renderPair();
+  const link = qs.has('nopeer') ? { restart() {}, broadcast() {} } : hostLink({ code: () => code, newCode() { code = newCode(); store.set('code', code); renderPair(); relay.retopic(); }, data: onSensor, status: onNet });
+  const relay = relayLink(() => code, 'host', { message: onSensor });
+  setInterval(pushState, 1000);
+  showLobby();
+
+  let sentState = '';
+  function tick(dt) {
+    if (state !== 'paused') update(dt);
+    if (state !== sentState) { sentState = state; pushState(); }
+    render(dt); hud(); bannerStep(dt);
+    if (bigT > 0) { bigT -= dt; if (bigT <= 0) $('bigmsg').hidden = true; }
+  }
+  let last = performance.now();
+  function frame(now) {
+    tick(Math.min(0.05, Math.max(0, (now - last) / 1000))); last = now;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  if (qs.has('debug')) window.pedalDebug = {
+    run(sec, opts) {
+      opts = opts || {};
+      for (let i = 0; i < sec * 30; i++) {
+        if (opts.rpm != null) { Input.sensor = opts.rpm; Input.at = performance.now(); }
+        if (state !== 'paused') update(1 / 30);
+        bannerStep(1 / 30);
+        if (bigT > 0) { bigT -= 1 / 30; if (bigT <= 0) $('bigmsg').hidden = true; }
+      }
+      render(1); hud();
+      return { state, d: Math.round(R.d), kmh: Math.round(R.v * 36) / 10, rank: R.rank, t: Math.round(R.t), grade: Math.round(R.grade * 1000) / 10, chunks: chunks.size, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, gaps: R.rivals.map(r => Math.round(r.d - R.d)).sort((a, b) => b - a) };
+    },
+    key(k) { dispatchEvent(new KeyboardEvent('keydown', { key: k })); dispatchEvent(new KeyboardEvent('keyup', { key: k })); },
+    shot() { render(0.016); }
+  };
+}
+
+if (qs.has('k') || qs.get('m') === 'sensor') startSensor(); else startGame();
+})();
+</script>
+</body>
+</html>
