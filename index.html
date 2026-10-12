@@ -322,6 +322,7 @@ h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: upperc
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
 <script>
 (() => {
 'use strict';
@@ -476,6 +477,37 @@ function joinLink(code, h) {
   return { send(d) { if (conn && conn.open) { try { conn.send(d); } catch (e) {} } } };
 }
 
+/* Relay over two public MQTT brokers: works when a direct WebRTC link can't be made
+   (browser privacy settings, NAT). The phone publishes rpm, the Mac publishes a heartbeat. */
+const MQTT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+function relayLink(getCode, role, h) {
+  if (!window.mqtt || qs.has('norelay')) return { send() {}, connected: () => false, retopic() {} };
+  const base = c => 'pedalyolu/v1/' + c;
+  const inTopic = role === 'host' ? '/rpm' : '/host', outTopic = role === 'host' ? '/host' : '/rpm';
+  let cur = getCode();
+  const clients = MQTT_BROKERS.map(url => {
+    let c;
+    try {
+      c = window.mqtt.connect(url, { clientId: 'py_' + role + '_' + Math.random().toString(36).slice(2, 10), clean: true, connectTimeout: 8000, reconnectPeriod: 3000, keepalive: 30 });
+    } catch (e) { return null; }
+    c.on('connect', () => c.subscribe(base(cur) + inTopic, { qos: 0 }));
+    c.on('message', (t, payload) => {
+      if (t !== base(cur) + inTopic) return;
+      try { h.message(JSON.parse(String(payload))); } catch (e) {}
+    });
+    c.on('error', () => {});
+    return c;
+  }).filter(Boolean);
+  return {
+    send(obj) { const s = JSON.stringify(obj); for (const c of clients) if (c.connected) c.publish(base(cur) + outTopic, s, { qos: 0 }); },
+    connected: () => clients.some(c => c.connected),
+    retopic() {
+      const old = cur; cur = getCode(); if (old === cur) return;
+      for (const c of clients) if (c.connected) { c.unsubscribe(base(old) + inTopic); c.subscribe(base(cur) + inTopic, { qos: 0 }); }
+    }
+  };
+}
+
 /* ---------- Phone: sensor page ---------- */
 function startSensor() {
   document.body.classList.add('is-sensor');
@@ -484,6 +516,7 @@ function startSensor() {
   const sim = qs.has('sim');
   let code = cleanCode(qs.get('k'));
   let link = null, running = false, seen = 0, wake = null, loop = 0, simLoop = 0, simRpm = 80, simPh = 0, simLast = 0;
+  let relay = null, peerState = 'connecting', lastHost = 0;
 
   if (code) showStart();
   else { $('sJoin').hidden = false; $('sCode').value = store.get('lastCode', ''); }
@@ -517,7 +550,8 @@ function startSensor() {
     if (sim) { $('sSim').hidden = false; simLast = performance.now(); simLoop = setInterval(simStep, 16); }
     else window.addEventListener('devicemotion', onMotion);
     keepAwake();
-    if (!link) link = joinLink(code, { status: netStatus });
+    if (!link && !qs.has('nopeer')) link = joinLink(code, { status: netStatus });
+    if (!relay) relay = relayLink(() => code, 'phone', { message: m => { if (m && m.h) { lastHost = Date.now(); renderNet(); } } });
     clearInterval(loop); loop = setInterval(tick, 200);
     setTimeout(() => { if (running && !sim && !seen) fail('Telefon hareket verisi göndermiyor. Chrome kullanıyorsan: Ayarlar › Site ayarları › Hareket sensörleri açık olmalı.'); }, 2500);
   }
@@ -527,6 +561,7 @@ function startSensor() {
     window.removeEventListener('devicemotion', onMotion);
     if (wake) { try { wake.release(); } catch (e) {} wake = null; }
     if (link) link.send({ r: 0, q: 0, s: '' });
+    if (relay) relay.send({ r: 0, q: 0, s: '' });
     $('sRun').hidden = true; $('sIdle').hidden = false;
     if (!silent) $('sRpm').textContent = '0';
   }
@@ -555,7 +590,10 @@ function startSensor() {
     if (r.rpm > 0) { sig.textContent = 'Ritim yakalandı (' + r.src + ')'; sig.className = 's-line ok'; }
     else if (r.weak) { sig.textContent = 'Hareket var ama ritim net değil. Telefonu uyluk hizasındaki cebe koy.'; sig.className = 's-line dim'; }
     else { sig.textContent = Cadence.count() ? 'Pedal bekleniyor' : 'Sensör verisi bekleniyor'; sig.className = 's-line dim'; }
-    link.send({ r: Math.round(r.rpm * 10) / 10, q: Math.round(r.q * 100) / 100, s: r.src });
+    const msg = { r: Math.round(r.rpm * 10) / 10, q: Math.round(r.q * 100) / 100, s: r.src };
+    if (link) link.send(msg);
+    if (relay) relay.send(msg);
+    renderNet();
   }
   const NET = {
     connecting: ['Oyun ekranına bağlanıyor…', ''],
@@ -565,7 +603,13 @@ function startSensor() {
     offline: ['İnternete ulaşılamıyor, yeniden deneniyor…', 'bad'],
     nolib: ['Bağlantı kütüphanesi yüklenemedi. İnterneti kontrol edip sayfayı yenile.', 'bad']
   };
-  function netStatus(s) { const [t, c] = NET[s] || NET.connecting; $('sNet').textContent = t; $('sNet').className = 's-line ' + c; }
+  function netStatus(s) { peerState = s; renderNet(); }
+  function renderNet() {
+    let s = peerState === 'ok' || Date.now() - lastHost < 4000 ? 'ok' : peerState;
+    if (s === 'nolib' && relay && relay.connected()) s = 'connecting';
+    const [t, c] = NET[s] || NET.connecting, el = $('sNet');
+    if (el.textContent !== t) { el.textContent = t; el.className = 's-line ' + c; }
+  }
   async function keepAwake() {
     if (!('wakeLock' in navigator)) { $('sWake').hidden = false; return; }
     try { wake = await navigator.wakeLock.request('screen'); $('sWake').hidden = true; } catch (e) { $('sWake').hidden = false; }
@@ -1203,7 +1247,7 @@ function startGame() {
   function setText(id, v) { v = String(v); if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } }
   function setAttr(id, a, v) { const k = id + '@' + a; v = String(v); if (cache[k] !== v) { cache[k] = v; $(id).setAttribute(a, v); } }
   function hud() {
-    if (state === 'attract') { setText('liveRpm', Math.round(performance.now() - Input.at < 2500 ? Input.sensor : 0)); return; }
+    if (state === 'attract') { setText('liveRpm', Math.round(performance.now() - Input.at < 2500 ? Input.sensor : 0)); netView(); return; }
     if (state === 'results') return;
     const rpm = Input.shown;
     setText('hSpeed', Math.round(R.v * 3.6));
@@ -1231,7 +1275,12 @@ function startGame() {
     wait: 'Kod hazırlanıyor…', ready: 'Telefon bekleniyor', phone: 'Telefon bağlı',
     offline: 'İnternete ulaşılamıyor, yeniden deneniyor', nolib: 'Bağlantı kütüphanesi yüklenemedi, sayfayı yenile'
   };
-  function onNet(s) { Input.net = s; $('netText').textContent = NET[s] || s; $('netDot').dataset.s = s; }
+  function onNet(s) { Input.net = s; }
+  function netView() {
+    let s = performance.now() - Input.at < 3000 || Input.net === 'phone' ? 'phone' : Input.net;
+    if (s !== 'phone' && relay.connected()) s = 'ready';
+    setText('netText', NET[s] || s); setAttr('netDot', 'data-s', s);
+  }
   function renderPair() {
     $('code').textContent = code;
     const url = location.origin + location.pathname + '?k=' + code;
@@ -1263,7 +1312,7 @@ function startGame() {
 
   document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => pick(b.dataset.mode)));
   document.querySelectorAll('#diff button').forEach(b => b.addEventListener('click', () => { diff = +b.dataset.diff; store.set('diff', diff); markLobby(); }));
-  $('newCode').addEventListener('click', () => { code = newCode(); store.set('code', code); renderPair(); onNet('wait'); link.restart(); });
+  $('newCode').addEventListener('click', () => { code = newCode(); store.set('code', code); renderPair(); onNet('wait'); link.restart(); relay.retopic(); });
   $('pResume').addEventListener('click', resume);
   $('pEnd').addEventListener('click', () => showResults(true));
   $('pMenu').addEventListener('click', showLobby);
@@ -1296,7 +1345,9 @@ function startGame() {
   buildSprites();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => buildSprites());
   renderPair();
-  const link = hostLink({ code: () => code, newCode() { code = newCode(); store.set('code', code); renderPair(); }, data: onSensor, status: onNet });
+  const link = qs.has('nopeer') ? { restart() {} } : hostLink({ code: () => code, newCode() { code = newCode(); store.set('code', code); renderPair(); relay.retopic(); }, data: onSensor, status: onNet });
+  const relay = relayLink(() => code, 'host', { message: onSensor });
+  setInterval(() => relay.send({ h: 1 }), 1000);
   showLobby();
 
   function tick(dt) {
