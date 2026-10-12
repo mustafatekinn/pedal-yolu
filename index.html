@@ -1,0 +1,1330 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10141f">
+<title>Pedal Yolu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Teko:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed road canvas; HUD pinned to the corners like a bike computer; menus are dusk-tinted glass over the moving road */
+:root {
+  --dusk: #10141f;
+  --panel: rgba(15, 19, 30, .74);
+  --panel-solid: #161b28;
+  --line: rgba(243, 234, 216, .14);
+  --ink: #f3ead8;
+  --muted: #a9aebb;
+  --apricot: #ffb35c;
+  --teal: #4fd3c0;
+  --rose: #ff7a6b;
+  --f-num: "Teko", "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --f-ui: "Barlow Semi Condensed", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { height: 100%; margin: 0 }
+body { background: var(--dusk); color: var(--ink); font: 500 17px/1.4 var(--f-ui); overflow: hidden; -webkit-font-smoothing: antialiased }
+body.is-sensor { overflow: auto; background: #07090e }
+[hidden] { display: none !important }
+button { font: inherit; color: inherit; cursor: pointer }
+:focus-visible { outline: 2px solid var(--apricot); outline-offset: 3px }
+kbd { font: 600 .85em var(--f-ui); padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,.06) }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block }
+.screen { position: fixed; inset: 0; overflow: auto }
+.num { font-family: var(--f-num); font-weight: 500; line-height: .82; font-variant-numeric: tabular-nums }
+.lbl { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px) }
+.btn { border: 1px solid var(--line); background: rgba(255,255,255,.06); border-radius: 999px; padding: 10px 20px; font-weight: 700; display: inline-flex; gap: 10px; align-items: center }
+.btn:hover { border-color: rgba(255,179,92,.6) }
+.btn.primary { background: var(--apricot); color: #1c1408; border-color: transparent }
+.btn.primary kbd { border-color: rgba(28,20,8,.25); background: rgba(28,20,8,.08) }
+.btn.ghost { background: none }
+
+/* ---- lobby ---- */
+#lobby { display: flex; flex-direction: column; background: linear-gradient(90deg, rgba(11,14,22,.94) 0%, rgba(11,14,22,.8) 48%, rgba(11,14,22,.4) 100%); padding: 32px 16px 20px }
+.lobby-in { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .9fr); gap: 48px; align-items: center; padding-inline: clamp(0px, 3vw, 32px) }
+.eyebrow { margin: 0; color: var(--apricot); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; font-size: 14px }
+h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: uppercase; margin: 18px 0 10px; letter-spacing: .01em; text-wrap: balance }
+.lede { margin: 0; max-width: 34em; color: #d9d2c3; font-size: 19px }
+.modes { display: grid; gap: 10px; margin-top: 28px; max-width: 560px }
+.mode { display: grid; grid-template-columns: 46px minmax(0, 1fr); column-gap: 16px; align-items: center; text-align: left; padding: 13px 18px; border-radius: 14px; border: 1px solid var(--line); background: rgba(16,20,31,.6); transition: border-color .15s, background .15s }
+.mode:hover, .mode.sel { border-color: rgba(255,179,92,.7); background: rgba(255,179,92,.07) }
+.m-key { grid-row: 1 / 3; font: 500 38px/1 var(--f-num); color: var(--apricot); text-align: center; border-right: 1px solid var(--line); padding-top: 4px }
+.m-name { font-weight: 700; font-size: 22px; line-height: 1.15 }
+.m-desc { color: var(--muted); font-size: 15px }
+.diff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 18px }
+.diff .lbl { margin-right: 6px }
+.diff button { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 5px 14px; font-weight: 600; color: var(--muted) }
+.diff button[aria-checked="true"] { color: #1c1408; background: var(--ink); border-color: var(--ink) }
+.hint { color: var(--muted); font-size: 15px; margin: 18px 0 0; max-width: 34em }
+.pair { padding: 24px }
+.pair h2 { margin: 0 0 16px; font: 600 40px/.9 var(--f-num); text-transform: uppercase; letter-spacing: .02em }
+.pair-row { display: grid; grid-template-columns: 156px minmax(0, 1fr); gap: 20px; align-items: start }
+.qr { background: #fff; border-radius: 12px; padding: 10px; width: 156px; aspect-ratio: 1; max-width: 100% }
+.qr svg { display: block; width: 100%; height: 100% }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: #ddd6c8; font-size: 16px }
+.steps b { color: var(--ink) }
+.pair-code { display: flex; align-items: baseline; gap: 12px; margin-top: 18px }
+.pair-code .num { font-size: 52px; letter-spacing: .12em; color: var(--apricot) }
+.link { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; font-size: 15px; margin-left: auto }
+.pair-url { margin: 4px 0 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere }
+.pair-status { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-weight: 600 }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none }
+.dot[data-s="phone"] { background: var(--teal); box-shadow: 0 0 0 4px rgba(79,211,192,.18) }
+.dot[data-s="offline"], .dot[data-s="nolib"] { background: var(--rose) }
+.live { margin-left: auto; color: var(--muted) }
+.live .num { font-size: 30px; color: var(--ink) }
+.warn-note { margin: 12px 0 0; color: var(--rose); font-size: 15px }
+.journey { width: 100%; max-width: 1180px; margin: 28px auto 0; padding-inline: clamp(0px, 3vw, 32px) }
+.j-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font-weight: 600 }
+.j-track { position: relative; height: 6px; border-radius: 3px; background: rgba(243,234,216,.13); margin: 34px 0 30px }
+.j-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 3px; background: var(--apricot) }
+.j-stop { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 2px; height: 14px; background: rgba(243,234,216,.4) }
+.j-stop.on { background: var(--apricot) }
+.j-stop em { position: absolute; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 13px; color: var(--muted); white-space: nowrap; top: 18px }
+.j-stop:nth-child(odd) em { top: auto; bottom: 18px }
+.j-stop.on em { color: var(--ink) }
+@media (max-width: 900px) {
+  .lobby-in { grid-template-columns: minmax(0, 1fr); gap: 28px }
+  #lobby { background: rgba(11,14,22,.9) }
+}
+@media (max-width: 560px) {
+  .pair-row { grid-template-columns: minmax(0, 1fr) }
+  .j-stop em { display: none }
+}
+
+/* ---- HUD ---- */
+#hud { position: fixed; inset: 0; pointer-events: none }
+.hb { position: absolute; padding: 12px 18px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px) }
+.tl { top: 16px; left: 16px }
+.tc { top: 16px; left: 50%; transform: translateX(-50%); text-align: center }
+.tr { top: 16px; right: 16px; text-align: right }
+.bl { bottom: 16px; left: 16px; display: grid; grid-template-columns: auto auto; align-items: end; gap: 4px 14px }
+.br { bottom: 16px; right: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0 }
+.xl { font-size: 104px }
+.lg { font-size: 64px }
+.md { font-size: 36px }
+.speed-row { display: flex; align-items: baseline; gap: 8px }
+.of { color: var(--muted); font-size: .55em }
+.gauge svg { width: 132px; height: 76px; display: block; grid-row: 1 / 3 }
+.g-track { fill: none; stroke: rgba(243,234,216,.14); stroke-width: 9; stroke-linecap: round }
+.g-zone { fill: none; stroke: rgba(79,211,192,.35); stroke-width: 9 }
+.g-val { fill: none; stroke: var(--teal); stroke-width: 9; stroke-linecap: round; transition: stroke .2s }
+.g-val[data-z="low"] { stroke: var(--muted) }
+.g-val[data-z="hot"] { stroke: var(--apricot) }
+.chip { padding: 6px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-weight: 700; font-size: 16px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px) }
+.chip[data-t="up"] { color: var(--apricot) }
+.chip[data-t="down"] { color: var(--teal) }
+.chip[data-t="phone"] { color: var(--teal) }
+.banner { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); padding: 8px 24px 4px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font: 500 40px/1 var(--f-num); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis }
+.banner[data-tone="good"] { color: var(--teal); border-color: rgba(79,211,192,.5) }
+.banner[data-tone="hot"] { color: var(--apricot); border-color: rgba(255,179,92,.5) }
+.banner[data-tone="warn"] { color: var(--rose); border-color: rgba(255,122,107,.45) }
+.banner.pop { animation: pop .35s ease-out }
+@keyframes pop { from { transform: translate(-50%, -8px); opacity: 0 } to { transform: translate(-50%, 0); opacity: 1 } }
+.sprint { position: absolute; top: 212px; left: 50%; transform: translateX(-50%); width: min(340px, calc(100vw - 32px)); text-align: center }
+.sprint-bar { height: 10px; border-radius: 5px; background: rgba(243,234,216,.15); overflow: hidden; margin-top: 6px }
+.sprint-bar i { display: block; height: 100%; width: 0; background: var(--apricot) }
+.sprint-lbl { font-weight: 700; text-shadow: 0 1px 6px rgba(0,0,0,.6) }
+.bigmsg { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); text-align: center; text-shadow: 0 4px 30px rgba(0,0,0,.45) }
+.bigmsg b { display: block; font: 600 clamp(64px, 11vw, 180px)/.8 var(--f-num); text-transform: uppercase; letter-spacing: .02em; white-space: nowrap }
+.bigmsg span { display: block; font-weight: 700; font-size: 20px; margin-top: 10px }
+@media (max-width: 760px) {
+  .xl { font-size: 72px } .lg { font-size: 46px } .md { font-size: 28px }
+  .banner { font-size: 28px; top: 120px }
+  .sprint { top: 168px }
+}
+@media (prefers-reduced-motion: reduce) { .banner.pop { animation: none } }
+
+/* ---- overlays ---- */
+.overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; background: rgba(8,10,16,.55); padding: 16px; overflow: auto }
+.overlay > .card { margin-block: auto }
+.res { width: min(760px, 100%); padding: 28px }
+.res h2, .pz h2 { margin: 6px 0 4px; font: 600 clamp(56px, 9vw, 88px)/.85 var(--f-num); text-transform: uppercase; text-wrap: balance }
+.note { margin: 0 0 18px; color: var(--apricot); font-weight: 700 }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 16px 20px; margin: 0 0 22px }
+.stats div { min-width: 0 }
+.stats dt { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+.stats dd { margin: 4px 0 0; font: 500 44px/.85 var(--f-num); font-variant-numeric: tabular-nums }
+.stats dd small { font: 600 15px var(--f-ui); color: var(--muted); margin-left: 4px }
+.board { list-style: none; margin: 0 0 22px; padding: 0; display: grid; gap: 2px; counter-reset: pos }
+.board li { counter-increment: pos; display: grid; grid-template-columns: 34px 14px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px }
+.board li::before { content: counter(pos); font: 500 26px/1 var(--f-num); color: var(--muted); padding-top: 3px }
+.board li.me { background: rgba(255,179,92,.12) }
+.board li.me::before { color: var(--apricot) }
+.board i { width: 12px; height: 12px; border-radius: 3px }
+.board span:last-child { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600 }
+.actions { display: flex; flex-wrap: wrap; gap: 10px }
+.pz { padding: 28px; width: min(440px, 100%) }
+.pz p { color: var(--muted); margin: 0 0 20px }
+
+/* ---- phone sensor ---- */
+.s-wrap { max-width: 460px; margin: 0 auto; padding: 28px 16px 40px; min-height: 100%; display: flex; flex-direction: column; gap: 22px }
+.s-head { display: flex; align-items: baseline; gap: 10px }
+.s-head b { font: 600 40px/.9 var(--f-num); text-transform: uppercase }
+.s-head span { color: var(--muted); font-weight: 600 }
+.s-panel { display: grid; gap: 16px }
+.s-panel label { font-weight: 700; font-size: 19px }
+.s-panel input { font: 500 54px/1 var(--f-num); letter-spacing: .14em; text-transform: uppercase; text-align: center; padding: 14px 10px 6px; border-radius: 14px; border: 1px solid var(--line); background: #10141f; color: var(--apricot); width: 100% }
+.big { justify-content: center; font-size: 22px; padding: 16px 20px }
+.s-code { margin: 0; color: var(--muted); font-weight: 600 }
+.s-code b { color: var(--apricot); font: 500 34px/1 var(--f-num); letter-spacing: .12em; margin-left: 6px }
+.s-err { margin: 0; color: var(--rose); font-weight: 600 }
+.s-run { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding-top: 6vh }
+.s-rpm { font-size: 180px; color: #d8d1c2 }
+.s-line { margin: 6px 0 0; font-weight: 600; max-width: 26em }
+.s-line.ok { color: var(--teal) }
+.s-line.bad { color: var(--rose) }
+.s-line.dim { color: var(--muted); font-weight: 500 }
+.sim { width: 100%; margin-top: 18px; text-align: left; display: grid; gap: 6px }
+.sim input { width: 100% }
+.hold { position: relative; overflow: hidden; margin-top: auto; width: 100%; border: 1px solid var(--line); background: #10141f; color: var(--muted); border-radius: 999px; padding: 16px; font-weight: 700; touch-action: none; user-select: none; -webkit-user-select: none }
+.hold i { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(255,122,107,.3) }
+.hold.holding i { width: 100%; transition: width 1.5s linear }
+.hold span { position: relative }
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="Yol görünümü"></canvas>
+
+<section id="lobby" class="screen" hidden>
+  <div class="lobby-in">
+    <div>
+      <p class="eyebrow">Spinning bisikleti · telefon cepte</p>
+      <h1>Pedal Yolu</h1>
+      <p class="lede">Telefon cebinde pedal ritmini sayar, yol bu ekranda akar. Hızlı çevirirsen hızlı gidersin. Yokuşta direnci biraz artır, inişte nefeslen.</p>
+      <div class="modes" id="modes">
+        <button class="mode" data-mode="race3"><span class="m-key">1</span><span class="m-name">3 km yarış</span><span class="m-desc">7 rakip, sondan başlıyorsun</span></button>
+        <button class="mode" data-mode="race10"><span class="m-key">2</span><span class="m-name">10 km yarış</span><span class="m-desc">Uzun, tepeli parkur</span></button>
+        <button class="mode" data-mode="free"><span class="m-key">3</span><span class="m-name">Serbest sürüş</span><span class="m-desc">Bitiş yok, arada sprint görevleri</span></button>
+      </div>
+      <div class="diff" role="radiogroup" aria-label="Rakip zorluğu" id="diff">
+        <span class="lbl">Rakipler</span>
+        <button role="radio" data-diff="0">Kolay</button>
+        <button role="radio" data-diff="1">Orta</button>
+        <button role="radio" data-diff="2">Zor</button>
+      </div>
+      <p class="hint">Telefonsuz denemek için <kbd>↑</kbd> ya da <kbd>Boşluk</kbd> tuşunu basılı tut, <kbd>Shift</kbd> ile sprint at. <kbd>Esc</kbd> mola, <kbd>M</kbd> ses.</p>
+    </div>
+    <aside class="pair card">
+      <h2>Telefonu bağla</h2>
+      <div class="pair-row">
+        <div class="qr" id="qr"></div>
+        <ol class="steps">
+          <li>Telefon kamerasıyla kodu okut.</li>
+          <li>Açılan sayfada <b>Başla</b>'ya bas, hareket iznini ver.</li>
+          <li>Telefonu pantolonun ön cebine koy. Ekran açık kalsın.</li>
+        </ol>
+      </div>
+      <div class="pair-code"><span class="lbl">Kod</span><b id="code" class="num">·····</b><button id="newCode" class="link" type="button">Yeni kod</button></div>
+      <p class="pair-url" id="pairUrl"></p>
+      <div class="pair-status"><span class="dot" id="netDot"></span><span id="netText">Bağlanıyor…</span><span class="live"><b id="liveRpm" class="num">0</b> rpm</span></div>
+      <p class="warn-note" id="localNote" hidden>Bu kopya bilgisayardan yerel açılmış. Telefonun bağlanabilmesi için sayfayı internet (https) adresinden aç.</p>
+    </aside>
+  </div>
+  <footer class="journey">
+    <div class="j-head"><span class="lbl">Toplam yol · İstanbul → Ankara (yaklaşık)</span><span id="jText"></span></div>
+    <div class="j-track" id="jTrack"><i class="j-fill" id="jFill"></i></div>
+  </footer>
+</section>
+
+<div id="hud" hidden>
+  <div class="hb tl">
+    <div class="speed-row"><span class="num xl" id="hSpeed">0</span><span class="lbl">km/sa</span></div>
+  </div>
+  <div class="hb tc" id="hRankBox">
+    <div class="lbl">Sıra</div>
+    <div class="num lg"><span id="hRank">8</span><span class="of">/<span id="hField">8</span></span></div>
+  </div>
+  <div class="hb tr">
+    <div class="num lg" id="hDist">0,00</div>
+    <div class="lbl" id="hDistLbl">/ 3 km</div>
+    <div class="num md" id="hTime">00:00</div>
+  </div>
+  <div class="hb bl gauge">
+    <svg viewBox="0 0 120 70" aria-hidden="true">
+      <path class="g-track" d="M12 62 A48 48 0 0 1 108 62" pathLength="100"/>
+      <path class="g-zone" d="M12 62 A48 48 0 0 1 108 62" pathLength="100" stroke-dasharray="21.4 100" stroke-dashoffset="-50"/>
+      <path class="g-val" id="gVal" d="M12 62 A48 48 0 0 1 108 62" pathLength="100" stroke-dasharray="0 100"/>
+    </svg>
+    <span class="num lg" id="hRpm">0</span>
+    <span class="lbl">rpm</span>
+  </div>
+  <div class="hb br">
+    <span class="chip" id="hGrade">Düz yol</span>
+    <span class="chip" id="hSrc">Klavye</span>
+  </div>
+  <div id="banner" class="banner" hidden></div>
+  <div id="sprint" class="sprint" hidden><div class="sprint-lbl" id="sprintLbl"></div><div class="sprint-bar"><i id="sprintFill"></i></div></div>
+  <div id="bigmsg" class="bigmsg" hidden><b id="bigT"></b><span id="bigS"></span></div>
+</div>
+
+<section id="pause" class="overlay" hidden>
+  <div class="card pz">
+    <p class="lbl">Mola</p>
+    <h2>Su iç</h2>
+    <p>Sayaç durdu. Hazır olunca devam et.</p>
+    <div class="actions">
+      <button class="btn primary" id="pResume">Devam <kbd>Esc</kbd></button>
+      <button class="btn" id="pEnd">Bitir</button>
+      <button class="btn ghost" id="pMenu">Menü</button>
+    </div>
+  </div>
+</section>
+
+<section id="results" class="overlay" hidden>
+  <div class="card res">
+    <p class="lbl" id="rKind"></p>
+    <h2 id="rTitle"></h2>
+    <p class="note" id="rNote"></p>
+    <dl class="stats" id="rStats"></dl>
+    <ol class="board" id="rBoard"></ol>
+    <div class="actions">
+      <button class="btn primary" id="rAgain">Tekrar <kbd>Enter</kbd></button>
+      <button class="btn" id="rMenu">Menü <kbd>Esc</kbd></button>
+    </div>
+  </div>
+</section>
+
+<section id="sensor" class="screen" hidden>
+  <div class="s-wrap">
+    <header class="s-head"><b>Pedal Yolu</b><span>telefon sensörü</span></header>
+    <form id="sJoin" class="s-panel" hidden>
+      <label for="sCode">Mac ekranındaki kodu yaz</label>
+      <input id="sCode" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8">
+      <button class="btn primary big" type="submit">Devam</button>
+      <p id="sJoinErr" class="s-err" hidden>Kod en az 4 karakter olmalı.</p>
+    </form>
+    <div id="sIdle" class="s-panel" hidden>
+      <p class="s-code">Kod<b id="sCodeShow"></b></p>
+      <ol class="steps">
+        <li><b>Başla</b>'ya bas, hareket iznini ver.</li>
+        <li>Telefonu pantolonun ön cebine koy. Yönü fark etmez.</li>
+        <li>Pedal çevir. Ritim 3-4 saniyede oturur.</li>
+      </ol>
+      <button id="sGo" class="btn primary big" type="button">Başla</button>
+      <p id="sErr" class="s-err" hidden></p>
+    </div>
+    <div id="sRun" class="s-run" hidden>
+      <div class="num s-rpm" id="sRpm">0</div>
+      <div class="lbl">rpm</div>
+      <p class="s-line" id="sNet">Bağlanıyor…</p>
+      <p class="s-line dim" id="sSig">Pedal bekleniyor</p>
+      <p class="s-line dim" id="sWake" hidden>Ekran kapanırsa sayım durur. Telefonun otomatik kilidini geçici olarak kapat.</p>
+      <div class="sim" id="sSim" hidden><label for="sSimR">Sanal pedal: <b id="sSimV">80</b> rpm</label><input type="range" id="sSimR" min="0" max="130" value="80"></div>
+      <button id="sStop" class="hold" type="button"><i></i><span>Durdurmak için basılı tut</span></button>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+const PREFIX = 'pedalyolu-v1-';
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const PeerCtor = window.Peer || (window.peerjs && window.peerjs.Peer) || null;
+const PEER_OPTS = { host: '0.peerjs.com', port: 443, secure: true, path: '/', debug: 0 };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('py.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('py.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeIn = (a, b, t) => a + (b - a) * t * t;
+const easeInOut = (a, b, t) => a + (b - a) * (-Math.cos(t * Math.PI) / 2 + 0.5);
+function rng(seed) {
+  return () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+const cleanCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+const fmtTime = s => { s = Math.max(0, Math.floor(s)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+const fmtKm = m => (m / 1000).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt1 = n => n.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/* ---------- Cadence: pedal rhythm from a phone in the thigh pocket ----------
+   The thigh swings once per crank turn. Resample the last 3.2 s of gyro (or
+   accelerometer) to 50 Hz and find the period with a 3-axis autocorrelation,
+   which does not care how the phone sits in the pocket. */
+const Cadence = (() => {
+  const FS = 50, N = 160, KMIN = 17, KMAX = 92;          // 32..176 rpm
+  const buf = [];
+  let out = 0, q = 0, src = '';
+  function push(t, g, a) {
+    buf.push({ t, g, a });
+    while (buf.length && buf[0].t < t - 5000) buf.shift();
+  }
+  function grid(key) {
+    const tEnd = buf[buf.length - 1].t, t0 = tEnd - (N - 1) * 1000 / FS;
+    if (buf[0].t > t0 + 150) return null;
+    const X = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+    let j = 0;
+    for (let i = 0; i < N; i++) {
+      const tg = t0 + i * 1000 / FS;
+      while (j < buf.length - 2 && buf[j + 1].t <= tg) j++;
+      const s0 = buf[j], s1 = buf[j + 1] || s0, v0 = s0[key], v1 = s1[key];
+      if (!v0 || !v1) return null;
+      const f = s1.t > s0.t ? clamp((tg - s0.t) / (s1.t - s0.t), 0, 1) : 0;
+      for (let k = 0; k < 3; k++) X[k][i] = v0[k] + (v1[k] - v0[k]) * f;
+    }
+    for (const x of X) { let m = 0; for (let i = 0; i < N; i++) m += x[i]; m /= N; for (let i = 0; i < N; i++) x[i] -= m; }
+    return X;
+  }
+  function rms(X, from) { let s = 0; for (const x of X) for (let i = from; i < N; i++) s += x[i] * x[i]; return Math.sqrt(s / (N - from)); }
+  function period(X) {
+    let r0 = 0; for (const x of X) for (let i = 0; i < N; i++) r0 += x[i] * x[i];
+    r0 /= N; if (!(r0 > 0)) return null;
+    const r = new Float32Array(KMAX + 2);
+    for (let k = KMIN - 1; k <= KMAX + 1; k++) {
+      let s = 0; for (const x of X) for (let i = 0; i < N - k; i++) s += x[i] * x[i + k];
+      r[k] = s / (N - k) / r0;
+    }
+    const peaks = [];
+    for (let k = KMIN; k <= KMAX; k++) if (r[k] > r[k - 1] && r[k] >= r[k + 1] && r[k] > 0.25) peaks.push(k);
+    if (!peaks.length) return null;
+    let best = peaks[0];
+    for (const k of peaks) if (r[k] > r[best]) best = k;
+    for (const k of peaks) if (k < best * 0.7 && r[k] > r[best] * 0.8) { best = k; break; }   // avoid locking on 2x the period
+    const a = r[best - 1], b = r[best], c = r[best + 1], den = a - 2 * b + c;
+    const kf = best + (den < 0 ? 0.5 * (a - c) / den : 0);
+    return { rpm: 60 * FS / kf, q: b };
+  }
+  function analyse(key, thr) {
+    const X = grid(key); if (!X) return null;
+    if (rms(X, N - 40) < thr || rms(X, 0) < thr * 0.8) return { idle: true };
+    const p = period(X);
+    return p && p.q >= 0.35 ? p : { weak: true };
+  }
+  function compute() {
+    let res = null, kind = '', weak = false;
+    if (buf.length > 20) {
+      const g = analyse('g', 12);
+      if (g && g.rpm) { res = g; kind = 'jiroskop'; }
+      else {
+        const a = analyse('a', 0.7);
+        if (a && a.rpm) { res = a; kind = 'ivmeölçer'; }
+        weak = !!((g && g.weak) || (a && a.weak));
+      }
+    }
+    if (res) { out = out < 1 ? res.rpm : out + (res.rpm - out) * 0.5; q = res.q; src = kind; }
+    else { out *= weak ? 0.88 : 0.5; if (out < 15) out = 0; q = 0; }
+    return { rpm: out, q, src, weak };
+  }
+  return { push, compute, count: () => buf.length };
+})();
+
+/* ---------- Link between the Mac page and the phone page (PeerJS / WebRTC) ---------- */
+function hostLink(h) {
+  if (!PeerCtor) { h.status('nolib'); return { restart() {} }; }
+  let peer = null, conns = 0, taken = 0;
+  function start() {
+    peer = new PeerCtor(PREFIX + h.code(), PEER_OPTS);
+    const me = peer;
+    me.on('open', () => { taken = 0; h.status(conns ? 'phone' : 'ready'); });
+    me.on('connection', c => {
+      c.on('open', () => { conns++; h.status('phone'); });
+      c.on('data', d => h.data(d));
+      c.on('close', () => { conns = Math.max(0, conns - 1); h.status(conns ? 'phone' : 'ready'); });
+      c.on('error', () => {});
+    });
+    me.on('disconnected', () => setTimeout(() => { if (me === peer && !me.destroyed && me.disconnected) me.reconnect(); }, 2000));
+    me.on('error', e => {
+      if (me !== peer || e.type === 'peer-unavailable') return;
+      if (e.type === 'unavailable-id') { me.destroy(); if (++taken >= 3) { taken = 0; h.newCode(); } h.status('wait'); setTimeout(start, 2500); return; }
+      h.status('offline');
+      setTimeout(() => { if (me !== peer) return; if (me.destroyed) start(); else if (me.disconnected) me.reconnect(); }, 3000);
+    });
+  }
+  start();
+  return { restart() { const old = peer; peer = null; try { old.destroy(); } catch (e) {} conns = 0; start(); } };
+}
+function joinLink(code, h) {
+  if (!PeerCtor) { h.status('nolib'); return { send() {} }; }
+  let peer = null, conn = null, timer = 0;
+  function start() {
+    peer = new PeerCtor(PEER_OPTS);
+    const me = peer;
+    me.on('open', connect);
+    me.on('disconnected', () => setTimeout(() => { if (!me.destroyed && me.disconnected) me.reconnect(); }, 2000));
+    me.on('error', e => {
+      if (e.type === 'peer-unavailable') { h.status('nogame'); retry(3000); return; }
+      h.status('offline');
+      setTimeout(() => { if (me !== peer) return; if (me.destroyed) start(); else if (me.disconnected) me.reconnect(); }, 3000);
+    });
+  }
+  function connect() {
+    if (conn) { try { conn.close(); } catch (e) {} }
+    h.status('connecting');
+    const c = peer.connect(PREFIX + code, { serialization: 'json', reliable: false });
+    conn = c;
+    c.on('open', () => { if (conn === c) h.status('ok'); });
+    c.on('close', () => { if (conn === c) { h.status('lost'); retry(2000); } });
+    c.on('error', () => { if (conn === c) retry(2000); });
+    setTimeout(() => { if (conn === c && !c.open) retry(0); }, 9000);
+  }
+  function retry(ms) {
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (!peer) return; if (peer.destroyed) start(); else if (peer.open) connect(); }, ms);
+  }
+  start();
+  return { send(d) { if (conn && conn.open) { try { conn.send(d); } catch (e) {} } } };
+}
+
+/* ---------- Phone: sensor page ---------- */
+function startSensor() {
+  document.body.classList.add('is-sensor');
+  $('view').hidden = true;
+  $('sensor').hidden = false;
+  const sim = qs.has('sim');
+  let code = cleanCode(qs.get('k'));
+  let link = null, running = false, seen = 0, wake = null, loop = 0, simLoop = 0, simRpm = 80, simPh = 0, simLast = 0;
+
+  if (code) showStart();
+  else { $('sJoin').hidden = false; $('sCode').value = store.get('lastCode', ''); }
+  $('sJoin').addEventListener('submit', e => {
+    e.preventDefault();
+    const c = cleanCode($('sCode').value);
+    if (c.length < 4) { $('sJoinErr').hidden = false; return; }
+    code = c; showStart();
+  });
+  function showStart() {
+    store.set('lastCode', code);
+    $('sJoin').hidden = true; $('sIdle').hidden = false;
+    $('sCodeShow').textContent = code;
+  }
+  $('sGo').addEventListener('click', () => {
+    $('sErr').hidden = true;
+    const DME = window.DeviceMotionEvent;
+    if (!sim && DME && typeof DME.requestPermission === 'function') {
+      DME.requestPermission()
+        .then(st => st === 'granted' ? begin() : fail('Hareket izni verilmedi. Safari\'yi tamamen kapatıp sayfayı yeniden aç ve izin sorusunda "İzin Ver"e bas.'))
+        .catch(() => fail('Hareket izni istenemedi. Sayfayı yenileyip tekrar Başla\'ya bas.'));
+    } else begin();
+  });
+  function fail(msg) {
+    stop(true);
+    $('sErr').textContent = msg; $('sErr').hidden = false;
+  }
+  function begin() {
+    running = true; seen = 0;
+    $('sIdle').hidden = true; $('sRun').hidden = false;
+    if (sim) { $('sSim').hidden = false; simLast = performance.now(); simLoop = setInterval(simStep, 16); }
+    else window.addEventListener('devicemotion', onMotion);
+    keepAwake();
+    if (!link) link = joinLink(code, { status: netStatus });
+    clearInterval(loop); loop = setInterval(tick, 200);
+    setTimeout(() => { if (running && !sim && !seen) fail('Telefon hareket verisi göndermiyor. Chrome kullanıyorsan: Ayarlar › Site ayarları › Hareket sensörleri açık olmalı.'); }, 2500);
+  }
+  function stop(silent) {
+    running = false;
+    clearInterval(loop); clearInterval(simLoop);
+    window.removeEventListener('devicemotion', onMotion);
+    if (wake) { try { wake.release(); } catch (e) {} wake = null; }
+    if (link) link.send({ r: 0, q: 0, s: '' });
+    $('sRun').hidden = true; $('sIdle').hidden = false;
+    if (!silent) $('sRpm').textContent = '0';
+  }
+  function onMotion(e) {
+    const rr = e.rotationRate, ag = e.accelerationIncludingGravity;
+    const g = rr && rr.alpha != null ? [rr.alpha, rr.beta, rr.gamma] : null;
+    const a = ag && ag.x != null ? [ag.x, ag.y, ag.z] : null;
+    if (!g && !a) return;
+    seen++;
+    Cadence.push(performance.now(), g, a);
+  }
+  function simStep() {
+    const now = performance.now(), dt = (now - simLast) / 1000; simLast = now;
+    simPh += simRpm / 60 * Math.PI * 2 * dt;
+    const amp = simRpm > 0 ? 1 : 0, n = () => (Math.random() - 0.5) * 2;
+    seen++;
+    Cadence.push(now,
+      [amp * 130 * Math.sin(simPh) + 6 * n(), amp * 40 * Math.sin(simPh + 0.8) + 6 * n(), amp * 18 * Math.sin(2 * simPh) + 4 * n()],
+      [amp * 3.6 * Math.sin(simPh + 0.3) + 0.15 * n(), 9.4 + amp * 1.2 * Math.cos(simPh) + 0.15 * n(), 1.5 + 0.15 * n()]);
+  }
+  $('sSimR').addEventListener('input', e => { simRpm = +e.target.value; $('sSimV').textContent = simRpm; });
+  function tick() {
+    const r = Cadence.compute();
+    $('sRpm').textContent = Math.round(r.rpm);
+    const sig = $('sSig');
+    if (r.rpm > 0) { sig.textContent = 'Ritim yakalandı (' + r.src + ')'; sig.className = 's-line ok'; }
+    else if (r.weak) { sig.textContent = 'Hareket var ama ritim net değil. Telefonu uyluk hizasındaki cebe koy.'; sig.className = 's-line dim'; }
+    else { sig.textContent = Cadence.count() ? 'Pedal bekleniyor' : 'Sensör verisi bekleniyor'; sig.className = 's-line dim'; }
+    link.send({ r: Math.round(r.rpm * 10) / 10, q: Math.round(r.q * 100) / 100, s: r.src });
+  }
+  const NET = {
+    connecting: ['Oyun ekranına bağlanıyor…', ''],
+    ok: ['Bağlandı. Telefonu cebe koy, Mac ekranına geç.', 'ok'],
+    nogame: ['Oyun ekranı bulunamadı. Mac\'te sayfa açık mı, kod doğru mu? Yeniden deneniyor.', 'bad'],
+    lost: ['Bağlantı koptu, yeniden deneniyor…', 'bad'],
+    offline: ['İnternete ulaşılamıyor, yeniden deneniyor…', 'bad'],
+    nolib: ['Bağlantı kütüphanesi yüklenemedi. İnterneti kontrol edip sayfayı yenile.', 'bad']
+  };
+  function netStatus(s) { const [t, c] = NET[s] || NET.connecting; $('sNet').textContent = t; $('sNet').className = 's-line ' + c; }
+  async function keepAwake() {
+    if (!('wakeLock' in navigator)) { $('sWake').hidden = false; return; }
+    try { wake = await navigator.wakeLock.request('screen'); $('sWake').hidden = true; } catch (e) { $('sWake').hidden = false; }
+  }
+  document.addEventListener('visibilitychange', () => { if (running && document.visibilityState === 'visible') keepAwake(); });
+  let holdT = 0; const hb = $('sStop');
+  hb.addEventListener('pointerdown', () => { hb.classList.add('holding'); holdT = setTimeout(() => { hb.classList.remove('holding'); stop(); }, 1500); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => hb.addEventListener(ev, () => { hb.classList.remove('holding'); clearTimeout(holdT); }));
+}
+
+/* ---------- Sound ---------- */
+const Sound = (() => {
+  let ac = null, windGain = null, windFilter = null, muted = store.get('muted', false);
+  function ensure() {
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; return; }
+    const len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    windFilter = ac.createBiquadFilter(); windFilter.type = 'lowpass'; windFilter.frequency.value = 300;
+    windGain = ac.createGain(); windGain.gain.value = 0;
+    src.connect(windFilter).connect(windGain).connect(ac.destination); src.start();
+  }
+  function wind(v) {
+    if (!ac) return;
+    windGain.gain.setTargetAtTime(muted ? 0 : Math.min(0.45, v * v * 0.0035), ac.currentTime, 0.4);
+    windFilter.frequency.setTargetAtTime(220 + v * 55, ac.currentTime, 0.4);
+  }
+  function tone(f, dur, type, vol, when) {
+    if (!ac || muted) return;
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + (when || 0);
+    o.type = type || 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol || 0.12, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.05);
+  }
+  return {
+    ensure, wind,
+    count() { tone(520, 0.15, 'square', 0.06); },
+    go() { tone(1040, 0.4, 'square', 0.07); },
+    pass() { tone(660, 0.12, 'triangle', 0.12); tone(990, 0.18, 'triangle', 0.12, 0.09); },
+    passed() { tone(300, 0.22, 'sawtooth', 0.05); },
+    sprint() { tone(700, 0.1, 'square', 0.06); tone(700, 0.1, 'square', 0.06, 0.16); },
+    win() { tone(784, 0.15, 'triangle', 0.12); tone(1175, 0.28, 'triangle', 0.12, 0.12); },
+    finish() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.3, 'triangle', 0.13, i * 0.13)); },
+    toggle() { muted = !muted; store.set('muted', muted); return muted; }
+  };
+})();
+
+/* ---------- Mac: the game ---------- */
+function startGame() {
+  const cv = $('view'), ctx = cv.getContext('2d');
+  const SEG = 200, UPM = 100, ROAD = 640, RUMBLE = 4, DRAW = 240, CAM_H = 210, PLAYER_Z = 430;
+  const camDepth = 1 / Math.tan(48 * Math.PI / 180);
+  const START_Z = 40 * SEG;
+  const MPS_PER_RPM = 0.11;                       // 90 rpm on the flat ≈ 36 km/h
+  const PAL = {
+    skyTop: '#203558', skyMid: '#5f5f86', skyLow: '#e39a6a', horizon: '#f6c891', sun: '#fff3d6',
+    haze: '#d8aa84', far: '#86749a', farLow: '#c79f90', near: '#5f6d4b', nearLow: '#8c8a5b', grassFar: '#8e8b57',
+    grassA: '#728237', grassB: '#7c8c40', shoulderA: '#b29a72', shoulderB: '#bda57c', roadA: '#42454d', roadB: '#484b54', line: '#ece6d8'
+  };
+  const RIVALS = [
+    { name: 'Efe', jersey: '#e4572e', stripe: '#ffd166', helmet: '#f4f1de' },
+    { name: 'Selin', jersey: '#2a9d8f', stripe: '#e9f5db', helmet: '#264653' },
+    { name: 'Bora', jersey: '#3d5a80', stripe: '#ee6c4d', helmet: '#e0fbfc' },
+    { name: 'Ece', jersey: '#9b5de5', stripe: '#fee440', helmet: '#f15bb5' },
+    { name: 'Kaan', jersey: '#f4a261', stripe: '#264653', helmet: '#2b2d42' },
+    { name: 'Duru', jersey: '#ef476f', stripe: '#ffffff', helmet: '#073b4c' },
+    { name: 'Arda', jersey: '#118ab2', stripe: '#06d6a0', helmet: '#ffd166' }
+  ].map(c => Object.assign({ shorts: '#1b1d23', skin: '#c98f6b', shoe: '#efeee9' }, c));
+  const ME = { name: 'Sen', jersey: '#ffb35c', stripe: '#1d2333', helmet: '#f3ead8', shorts: '#1b1d23', skin: '#c98f6b', shoe: '#efeee9' };
+  const DIFFS = [{ name: 'Kolay', k: 0.86 }, { name: 'Orta', k: 1 }, { name: 'Zor', k: 1.12 }];
+  const MODES = {
+    race3: { goal: 3000, rivals: 7, label: '3 km yarış' },
+    race10: { goal: 10000, rivals: 7, label: '10 km yarış' },
+    free: { goal: Infinity, rivals: 0, label: 'Serbest sürüş' },
+    attract: { goal: Infinity, rivals: 3, label: '' }
+  };
+  const ROUTE = 450;
+  const STOPS = [['İstanbul', 0], ['Gebze', 50], ['İzmit', 100], ['Adapazarı', 150], ['Düzce', 210], ['Bolu', 255], ['Gerede', 300], ['Kızılcahamam', 375], ['Ankara', 450]];
+  const Input = { kb: 0, sensor: 0, at: 0, q: 0, src: '', shown: 0, net: 'wait' };
+  const keys = { up: false, fast: false };
+
+  let W = 0, H = 0, HZ = 0, S = 0, DPR = 1;
+  let segments = [], rand = Math.random, finishIdx = -1, startIdx = -1, bgOffset = 0;
+  const bg = {}, SPR = {}, kmCache = {};
+  let RIVAL_FR = [];
+  let state = 'attract', modeKey = store.get('mode', 'race3'), diff = clamp(store.get('diff', 1) | 0, 0, 2);
+  let R = null;
+  const touched = [];
+
+  /* --- drawing helpers --- */
+  function mk(w, h, fn) { const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); return c; }
+  function rrect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function limb(g, x1, y1, x2, y2, w, c) { g.strokeStyle = c; g.lineWidth = w; g.lineCap = 'round'; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+  function oval(g, x, y, rx, ry, c) { g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fill(); }
+  function poly(x1, y1, x2, y2, x3, y3, x4, y4, c) { ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.lineTo(x4, y4); ctx.closePath(); ctx.fill(); }
+
+  /* Cyclist seen from behind; s = pixels per metre, ph = crank angle */
+  function drawRider(g, cx, gy, s, ph, col, shadow) {
+    const X = m => cx + m * s, Y = m => gy - m * s, sw = Math.sin(ph) * 0.014;
+    if (shadow) oval(g, cx, gy, 0.34 * s, 0.055 * s, 'rgba(25,18,12,.32)');
+    g.fillStyle = '#17181c'; rrect(g, X(-0.024), Y(0.69), 0.048 * s, 0.69 * s, 0.022 * s); g.fill();
+    oval(g, X(0.03), Y(0.33), 0.03 * s, 0.03 * s, '#6b6f78');
+    for (const side of [-1, 1]) {
+      const fy = 0.3 + 0.165 * Math.sin(ph + (side < 0 ? 0 : Math.PI));
+      const hi = (fy - 0.135) / 0.33;
+      const hx = side * 0.088 + sw, hy = 0.97;
+      const kx = side * (0.13 + 0.035 * hi) + sw * 0.5, ky = fy + 0.33 + 0.13 * hi;
+      const fx = side * 0.125;
+      limb(g, X(hx), Y(hy), X(kx), Y(ky), 0.12 * s, col.shorts);
+      limb(g, X(kx), Y(ky - 0.02), X(fx), Y(fy + 0.04), 0.085 * s, col.skin);
+      g.fillStyle = col.shoe; rrect(g, X(fx - 0.045), Y(fy + 0.045), 0.09 * s, 0.065 * s, 0.025 * s); g.fill();
+    }
+    oval(g, X(sw), Y(0.955), 0.075 * s, 0.03 * s, '#111216');
+    oval(g, X(sw), Y(1.0), 0.17 * s, 0.1 * s, col.shorts);
+    limb(g, X(-0.25), Y(1.07), X(0.25), Y(1.07), 0.03 * s, '#23252b');
+    for (const side of [-1, 1]) {
+      limb(g, X(side * 0.185 + sw), Y(1.32), X(side * 0.235), Y(1.1), 0.07 * s, col.skin);
+      limb(g, X(side * 0.185 + sw), Y(1.32), X(side * 0.205 + sw * 0.6), Y(1.25), 0.09 * s, col.jersey);
+      oval(g, X(side * 0.235), Y(1.085), 0.035 * s, 0.03 * s, '#202227');
+    }
+    g.fillStyle = col.jersey; g.beginPath();
+    g.moveTo(X(-0.16 + sw), Y(1.02)); g.lineTo(X(0.16 + sw), Y(1.02)); g.lineTo(X(0.215 + sw), Y(1.315));
+    g.quadraticCurveTo(X(sw), Y(1.4), X(-0.215 + sw), Y(1.315)); g.closePath(); g.fill();
+    g.fillStyle = col.stripe; g.beginPath();
+    g.moveTo(X(-0.175 + sw), Y(1.12)); g.lineTo(X(0.175 + sw), Y(1.12)); g.lineTo(X(0.185 + sw), Y(1.17)); g.lineTo(X(-0.185 + sw), Y(1.17)); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(0,0,0,.16)'; g.fillRect(X(-0.15 + sw), Y(1.075), 0.3 * s, 0.03 * s);
+    oval(g, X(sw), Y(1.375), 0.055 * s, 0.045 * s, col.skin);
+    oval(g, X(sw), Y(1.455), 0.105 * s, 0.085 * s, col.helmet);
+    limb(g, X(-0.045 + sw), Y(1.51), X(-0.045 + sw), Y(1.42), 0.014 * s, 'rgba(0,0,0,.25)');
+    limb(g, X(0.045 + sw), Y(1.51), X(0.045 + sw), Y(1.42), 0.014 * s, 'rgba(0,0,0,.25)');
+  }
+
+  function drawPoplar(g, w, h) {
+    g.fillStyle = '#5a4630'; g.fillRect(w * 0.45, h * 0.84, w * 0.1, h * 0.16);
+    const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#7a9442'); gr.addColorStop(0.5, '#47622d'); gr.addColorStop(1, '#2d4423');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(w / 2, 2);
+    g.bezierCurveTo(w * 1.02, h * 0.3, w * 0.86, h * 0.72, w * 0.56, h * 0.88); g.lineTo(w * 0.44, h * 0.88);
+    g.bezierCurveTo(w * 0.14, h * 0.72, -w * 0.02, h * 0.3, w / 2, 2); g.fill();
+    const r = rng(7);
+    for (let i = 0; i < 70; i++) {
+      const y = h * (0.06 + r() * 0.78), sp = Math.sin(Math.PI * Math.min(1, y / h / 0.9)) * w * 0.36;
+      oval(g, w / 2 + (r() - 0.5) * sp * 1.6, y, w * 0.07, h * 0.018, r() < 0.6 ? 'rgba(28,46,20,.35)' : 'rgba(220,200,120,.16)');
+    }
+  }
+  function drawTree(g, w, h) {
+    g.fillStyle = '#5b4631'; g.fillRect(w * 0.46, h * 0.55, w * 0.08, h * 0.45);
+    const r = rng(11);
+    for (let i = 0; i < 26; i++) {
+      const a = r() * Math.PI * 2, d = Math.sqrt(r());
+      const x = w / 2 + Math.cos(a) * d * w * 0.3, y = h * 0.36 + Math.sin(a) * d * h * 0.24;
+      const rad = w * (0.1 + r() * 0.08), shade = x < w / 2 ? '#6f8a3e' : '#4b6630';
+      oval(g, x, y, rad, rad * 0.9, i < 8 ? '#3e5528' : shade);
+    }
+    for (let i = 0; i < 10; i++) oval(g, w * (0.3 + r() * 0.25), h * (0.18 + r() * 0.3), w * 0.05, w * 0.04, 'rgba(225,205,130,.22)');
+  }
+  function drawBush(g, w, h) {
+    const r = rng(3);
+    for (let i = 0; i < 9; i++) oval(g, w * (0.2 + r() * 0.6), h * (0.45 + r() * 0.25), w * (0.14 + r() * 0.08), h * (0.32 + r() * 0.12), i % 3 ? '#5f7232' : '#748a3d');
+  }
+  function drawRock(g, w, h) {
+    g.fillStyle = '#958a7b'; g.beginPath(); g.moveTo(w * 0.05, h); g.lineTo(w * 0.18, h * 0.3); g.lineTo(w * 0.5, h * 0.06); g.lineTo(w * 0.86, h * 0.34); g.lineTo(w * 0.96, h); g.closePath(); g.fill();
+    g.fillStyle = '#b5aa98'; g.beginPath(); g.moveTo(w * 0.18, h * 0.3); g.lineTo(w * 0.5, h * 0.06); g.lineTo(w * 0.45, h * 0.6); g.lineTo(w * 0.12, h * 0.7); g.closePath(); g.fill();
+  }
+  function drawArch(g, w, h, text, fill) {
+    const pole = w * 0.025;
+    g.fillStyle = '#2b2e36'; g.fillRect(w * 0.02, h * 0.1, pole, h * 0.9); g.fillRect(w * 0.98 - pole, h * 0.1, pole, h * 0.9);
+    const by = h * 0.06, bh = h * 0.24, bx = w * 0.015, bw = w * 0.97;
+    if (fill) { g.fillStyle = fill; g.fillRect(bx, by, bw, bh); }
+    else {
+      const n = 44, cw = bw / n;
+      for (let i = 0; i < n; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#15161a' : '#f4f1ea'; g.fillRect(bx + i * cw, by + j * bh / 2, cw + 0.6, bh / 2 + 0.6); }
+      g.fillStyle = '#f4f1ea'; g.fillRect(w * 0.37, by - h * 0.02, w * 0.26, bh + h * 0.04);
+    }
+    g.fillStyle = fill ? '#fff' : '#15161a';
+    g.font = '600 ' + Math.round(bh * 0.95) + 'px Teko, "Arial Narrow", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, w / 2, by + bh * 0.6);
+  }
+  function kmSprite(km) {
+    if (kmCache[km]) return kmCache[km];
+    return (kmCache[km] = { w: 120, h: 225, c: mk(80, 150, g => {
+      g.fillStyle = '#cfc9bb'; g.fillRect(36, 60, 8, 90);
+      g.fillStyle = '#f4f1ea'; rrect(g, 4, 4, 72, 62, 8); g.fill();
+      g.strokeStyle = '#2b2e36'; g.lineWidth = 3; g.stroke();
+      g.fillStyle = '#1d2333'; g.textAlign = 'center';
+      g.font = '600 40px Teko, sans-serif'; g.fillText(String(km), 40, 44);
+      g.font = '700 14px "Barlow Semi Condensed", sans-serif'; g.fillText('KM', 40, 60);
+    }) });
+  }
+  function buildSprites() {
+    SPR.poplar = { c: mk(64, 340, drawPoplar), w: 230, h: 1220 };
+    SPR.tree = { c: mk(240, 230, drawTree), w: 760, h: 730 };
+    SPR.bush = { c: mk(150, 80, drawBush), w: 300, h: 160 };
+    SPR.rock = { c: mk(120, 70, drawRock), w: 170, h: 100 };
+    SPR.start = { c: mk(900, 420, (g, w, h) => drawArch(g, w, h, 'BAŞLANGIÇ', '#2a9d8f')), w: ROAD * 2.5, h: ROAD * 2.5 * 420 / 900 };
+    SPR.finish = { c: mk(900, 420, (g, w, h) => drawArch(g, w, h, 'BİTİŞ', null)), w: ROAD * 2.5, h: ROAD * 2.5 * 420 / 900 };
+    for (const k in kmCache) delete kmCache[k];
+    for (const s of segments) for (const sp of s.sprites) if (sp.k === 'km') sp.def = kmSprite(sp.km);
+    RIVAL_FR = RIVALS.map(col => Array.from({ length: 8 }, (_, f) => mk(130, 276, g => drawRider(g, 65, 270, 160, f / 8 * Math.PI * 2, col, true))));
+  }
+
+  function ridge(w, h, waves, base, top, bottom) {
+    return mk(w, h, g => {
+      const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, top); gr.addColorStop(1, bottom);
+      g.fillStyle = gr; g.beginPath(); g.moveTo(0, h);
+      const yAt = x => { const t = x / w * Math.PI * 2; let y = base; for (const [f, a, p] of waves) y += Math.sin(t * f + p) * a; return h - clamp(y, 0.02, 0.98) * h; };
+      for (let x = 0; x < w; x += 3) g.lineTo(x, yAt(x));
+      g.lineTo(w, yAt(w)); g.lineTo(w, h); g.closePath(); g.fill();
+    });
+  }
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = Math.max(320, Math.round(innerWidth * DPR)); H = Math.max(240, Math.round(innerHeight * DPR));
+    cv.width = W; cv.height = H;
+    S = Math.min(W, H * 1.75) / 2;
+    HZ = Math.round(H * 0.46);
+    const sky = ctx.createLinearGradient(0, 0, 0, HZ);
+    sky.addColorStop(0, PAL.skyTop); sky.addColorStop(0.5, PAL.skyMid); sky.addColorStop(0.84, PAL.skyLow); sky.addColorStop(1, PAL.horizon);
+    bg.sky = sky;
+    bg.far = ridge(W, Math.round(H * 0.25), [[1, 0.1, 0.4], [2, 0.07, 1.3], [3, 0.05, 2.1], [7, 0.025, 0.2], [13, 0.012, 1.7]], 0.5, PAL.far, PAL.farLow);
+    bg.near = ridge(W, Math.round(H * 0.14), [[2, 0.12, 2.4], [3, 0.08, 0.3], [5, 0.05, 1.1], [11, 0.02, 0.9], [23, 0.01, 2.2]], 0.42, PAL.near, PAL.nearLow);
+    ctx.imageSmoothingQuality = 'high';
+  }
+
+  /* --- track --- */
+  function lastY() { return segments.length ? segments[segments.length - 1].p2.world.y : 0; }
+  function addSegment(curve, y) {
+    const n = segments.length;
+    const s = { index: n, curve, sprites: [], riders: [], clip: 0, haze: 0,
+      dark: Math.floor(n / RUMBLE) % 2 === 1, dash: n % 3 === 0,
+      p1: { world: { y: lastY(), z: n * SEG }, camera: {}, screen: {} },
+      p2: { world: { y, z: (n + 1) * SEG }, camera: {}, screen: {} } };
+    segments.push(s);
+    const m1 = (n * SEG - START_Z) / UPM, m2 = ((n + 1) * SEG - START_Z) / UPM;
+    if (m2 > 0 && Math.floor(m2 / 1000) > Math.floor(m1 / 1000) && n !== finishIdx) { const km = Math.floor(m2 / 1000); s.sprites.push({ k: 'km', km, o: 1.3, def: kmSprite(km) }); }
+    if (n === finishIdx) s.sprites.push({ k: 'finish', o: 0 });
+    if (n === startIdx) s.sprites.push({ k: 'start', o: 0 });
+  }
+  function addRoad(enter, hold, leave, curve, dyM) {
+    const y0 = lastY(), y1 = y0 + dyM * UPM, total = enter + hold + leave;
+    for (let n = 0; n < enter; n++) addSegment(easeIn(0, curve, n / enter), easeInOut(y0, y1, (n + 1) / total));
+    for (let n = 0; n < hold; n++) addSegment(curve, easeInOut(y0, y1, (enter + n + 1) / total));
+    for (let n = 0; n < leave; n++) addSegment(easeInOut(curve, 0, n / leave), easeInOut(y0, y1, (enter + hold + n + 1) / total));
+  }
+  function genSection() {
+    const r = rand(), yM = lastY() / UPM;
+    if (r < 0.28) { addRoad(15, 40 + (rand() * 90 | 0), 15, 0, (rand() - 0.5) * 4); return rand() < 0.6 ? 'poplars' : 'open'; }
+    if (r < 0.62) { const c = (rand() < 0.5 ? -1 : 1) * (1 + rand() * 3); addRoad(30, 30 + (rand() * 70 | 0), 30, c, (rand() - 0.5) * 8); return 'open'; }
+    const len = 70 + (rand() * 150 | 0), g = 0.018 + rand() * 0.03;
+    let dir = rand() < 0.5 ? 1 : -1; if (yM > 50) dir = -1; if (yM < -25) dir = 1;
+    addRoad(len * 0.25 | 0, len * 0.5 | 0, len * 0.25 | 0, rand() < 0.4 ? (rand() - 0.5) * 3 : 0, dir * g * len * SEG / UPM);
+    return dir > 0 ? 'hill' : 'open';
+  }
+  function decorate(a, b, style) {
+    for (let i = a; i < b; i++) {
+      const s = segments[i], side = () => rand() < 0.5 ? -1 : 1;
+      if (style === 'poplars') { if (i % 7 === 0) { s.sprites.push({ k: 'poplar', o: -1.6 }); s.sprites.push({ k: 'poplar', o: 1.6 }); } continue; }
+      const r = rand();
+      if (r < (style === 'hill' ? 0.05 : 0.09)) s.sprites.push({ k: 'tree', o: side() * (1.9 + rand() * 3) });
+      else if (r < 0.15) s.sprites.push({ k: 'bush', o: side() * (1.35 + rand() * 1.6) });
+      else if (r < (style === 'hill' ? 0.22 : 0.17)) s.sprites.push({ k: 'rock', o: side() * (1.3 + rand() * 1.4) });
+      else if (r < 0.19) s.sprites.push({ k: 'poplar', o: side() * (2.2 + rand() * 2.5) });
+    }
+  }
+  function ensureTrack(z) {
+    while (segments.length * SEG < z) { const a = segments.length, st = genSection(); decorate(a, segments.length, st); }
+  }
+  function resetTrack(seed, goal) {
+    segments = []; rand = rng(seed);
+    startIdx = Math.floor((START_Z + 2500) / SEG);
+    finishIdx = isFinite(goal) ? Math.floor((START_Z + goal * UPM) / SEG) : -1;
+    addRoad(0, 75, 0, 0, 0);
+    decorate(0, 75, 'poplars');
+    ensureTrack(START_Z + (DRAW + 20) * SEG);
+  }
+  const segAt = z => segments[Math.floor(z / SEG)];
+  const gradeOf = s => (s.p2.world.y - s.p1.world.y) / SEG;
+
+  /* --- runs --- */
+  function makeRivals(n, k, r) {
+    const bases = [7.6, 8.0, 8.35, 8.7, 9.05, 9.4, 9.8].slice(0, Math.max(n, 0));
+    for (let i = bases.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [bases[i], bases[j]] = [bases[j], bases[i]]; }
+    return bases.map((b, i) => ({
+      name: RIVALS[i].name, ci: i, d: 16 + i * 14, v: 0, base: b * k,
+      x: i % 2 ? 0.08 : 0.44, f: 0.05 + r() * 0.07, p: r() * 6.28, phase: r() * 6.28, finishT: 0, wasAhead: true
+    }));
+  }
+  function newRun(kind) {
+    const m = MODES[kind], seed = (Math.random() * 1e9) | 0, r2 = rng(seed ^ 0x5bd1e995);
+    resetTrack(seed, m.goal);
+    R = {
+      kind, goal: m.goal, d: 0, v: kind === 'attract' ? 6.5 : 0, t: 0, clock: 0, px: 0.42, phase: 0,
+      camZ: START_Z - PLAYER_Z, rivals: makeRivals(m.rivals, kind === 'attract' ? 0.78 : DIFFS[diff].k, r2),
+      rank: 0, moving: 0, rpmInt: 0, maxRpm: 0, maxV: 0, climb: 0, lastY: 0, grade: 0,
+      finished: false, finishT: 0, finalRank: 0, savedD: 0, postT: 0, readyT: 0, countT: 0, lastBeep: 0,
+      sprint: null, nextSprint: 90, sprints: { done: 0, won: 0 }, hill: 0, last500: false, lastKm: 0
+    };
+    if (kind === 'attract') R.rivals.forEach(rv => { rv.d -= 6; rv.v = rv.base; });
+  }
+
+  /* --- input --- */
+  function readRpm(dt) {
+    if (keys.up) Input.kb = Math.min(keys.fast ? 118 : 90, Input.kb + 75 * dt);
+    else Input.kb = Math.max(0, Input.kb - 110 * dt);
+    const fresh = performance.now() - Input.at < 2500;
+    const target = Math.max(Input.kb, fresh ? Input.sensor : 0);
+    Input.shown += (target - Input.shown) * Math.min(1, dt * 4);
+    if (target === 0 && Input.shown < 1) Input.shown = 0;
+    return Input.shown;
+  }
+  function onSensor(d) {
+    if (!d || typeof d !== 'object') return;
+    Input.sensor = clamp(+d.r || 0, 0, 220); Input.q = +d.q || 0; Input.src = String(d.s || '').slice(0, 20); Input.at = performance.now();
+  }
+
+  /* --- update --- */
+  function update(dt) {
+    const rpm = readRpm(dt);
+    const animRpm = state === 'attract' ? 58 : rpm;
+    R.phase += animRpm / 60 * Math.PI * 2 * dt;
+    Sound.wind(state === 'run' || state === 'finish' ? R.v : 0);
+    switch (state) {
+      case 'attract': R.v = 6.5; advance(dt); rivalsStep(dt); break;
+      case 'ready':
+        if (rpm > 25) { R.readyT += dt; if (R.readyT > 0.8) beginCount(); } else R.readyT = Math.max(0, R.readyT - dt);
+        break;
+      case 'count': {
+        R.countT -= dt;
+        const n = Math.ceil(R.countT);
+        if (n !== R.lastBeep && n > 0) { R.lastBeep = n; bigMsg(String(n), '', 0); Sound.count(); }
+        if (R.countT <= 0) go();
+        break;
+      }
+      case 'run': physics(dt, rpm, false); break;
+      case 'finish': physics(dt, rpm, true); R.postT += dt; if (R.postT > 2.6) showResults(false); break;
+      case 'results': physics(dt, rpm, true); break;
+    }
+  }
+  function physics(dt, rpm, after) {
+    const pz = START_Z + R.d * UPM;
+    ensureTrack(pz + (DRAW + 10) * SEG);
+    const seg = segAt(pz), grade = gradeOf(seg);
+    R.grade = grade;
+    const pedal = rpm * MPS_PER_RPM * clamp(1 - grade * 7, 0.4, 1.6);
+    const coast = grade < -0.004 ? -grade * 140 : 0;
+    const target = Math.max(pedal, coast);
+    const k = target > R.v ? 0.85 : (rpm < 8 ? 0.3 : 0.55);
+    R.v = Math.max(0, R.v + (target - R.v) * Math.min(1, k * dt));
+    advance(dt);
+    R.clock += dt;
+    rivalsStep(dt);
+    if (after) return;
+    R.t += dt;
+    if (rpm > 20) { R.moving += dt; R.rpmInt += rpm * dt; }
+    R.maxRpm = Math.max(R.maxRpm, rpm); R.maxV = Math.max(R.maxV, R.v);
+    const y = lerp(seg.p1.world.y, seg.p2.world.y, (pz % SEG) / SEG) / UPM;
+    if (y > R.lastY) R.climb += y - R.lastY;
+    R.lastY = y;
+    rankCheck(); hillCheck(grade); sprintStep(dt, rpm); journeySave(false);
+    if (isFinite(R.goal) && !R.last500 && R.goal - R.d < 500) { R.last500 = true; banner('Son 500 metre!', 'hot'); }
+    if (R.kind === 'free') { const km = Math.floor(R.d / 1000); if (km > R.lastKm) { R.lastKm = km; banner(km + '. kilometre', 'good'); } }
+    if (R.d >= R.goal) finish();
+  }
+  function advance(dt) {
+    const before = R.d;
+    R.d += R.v * dt;
+    R.camZ = START_Z + R.d * UPM - PLAYER_Z;
+    const seg = segAt(START_Z + R.d * UPM);
+    if (seg) bgOffset += seg.curve * ((R.d - before) * UPM / SEG) * 0.0016;
+    let tx = 0.42;
+    for (const r of R.rivals) {
+      const gap = r.d - R.d;
+      if (gap > -3 && gap < 16 && R.v >= r.v - 0.3) { tx = r.x > 0.25 ? -0.22 : 0.64; break; }
+    }
+    R.px += (tx - R.px) * Math.min(1, dt * 1.4);
+  }
+  function rivalsStep(dt) {
+    for (const r of R.rivals) {
+      const z = START_Z + r.d * UPM;
+      ensureTrack(z + SEG * 4);
+      const g = gradeOf(segAt(z));
+      let want = r.base * (1 + 0.05 * Math.sin(R.clock * r.f + r.p)) * clamp(1 - g * 6, 0.5, 1.5);
+      if (r.finishT) want *= 0.5;
+      r.v += (want - r.v) * Math.min(1, dt * 0.7);
+      r.d += r.v * dt;
+      r.phase += r.v / MPS_PER_RPM / 60 * Math.PI * 2 * dt;
+      if (!r.finishT && isFinite(R.goal) && r.d >= R.goal) r.finishT = R.clock;
+    }
+  }
+  function rankCheck() {
+    const passed = [], by = [];
+    for (const r of R.rivals) {
+      if (r.wasAhead && r.d < R.d - 1) { r.wasAhead = false; passed.push(r.name); }
+      else if (!r.wasAhead && r.d > R.d + 1) { r.wasAhead = true; by.push(r.name); }
+    }
+    R.rank = 1 + R.rivals.filter(r => r.d > R.d).length;
+    if (passed.length) { banner('Geçtin: ' + passed.join(', '), 'good'); Sound.pass(); }
+    if (by.length) { banner(by.join(', ') + ' seni geçti', 'warn'); Sound.passed(); }
+  }
+  function hillCheck(g) {
+    if (g > 0.028 && R.hill !== 1) { R.hill = 1; banner('Yokuş başlıyor · direnci biraz artır', 'hot'); }
+    else if (g < -0.028 && R.hill !== -1) { R.hill = -1; banner('İniş · nefeslen', 'good'); }
+    else if (Math.abs(g) < 0.008) R.hill = 0;
+  }
+  function sprintStep(dt, rpm) {
+    if (R.kind !== 'free') return;
+    if (!R.sprint) {
+      if (R.t >= R.nextSprint) {
+        const avg = R.moving > 20 ? R.rpmInt / R.moving : 75;
+        const target = Math.max(80, Math.round(avg * 1.15 / 5) * 5);
+        R.sprint = { left: 15, ok: 0, target };
+        banner('Sprint! 15 sn boyunca ' + target + '+ rpm', 'hot'); Sound.sprint();
+      }
+      return;
+    }
+    const s = R.sprint;
+    s.left -= dt; if (rpm >= s.target) s.ok += dt;
+    if (s.left <= 0) {
+      const won = s.ok >= 10;
+      R.sprints.done++; if (won) R.sprints.won++;
+      banner(won ? 'Sprint tamam!' : 'Sprint kaçtı, sıradakinde', won ? 'good' : 'warn');
+      if (won) Sound.win(); else Sound.passed();
+      R.sprint = null; R.nextSprint = R.t + 100 + Math.random() * 80;
+    }
+  }
+  function journeySave(force) {
+    if (!R || R.kind === 'attract') return;
+    const dKm = (R.d - R.savedD) / 1000;
+    if (!force && dKm < 0.25) return;
+    if (dKm > 0) { store.set('journey', store.get('journey', 0) + dKm); R.savedD = R.d; }
+  }
+
+  /* --- state changes --- */
+  function pick(kind) {
+    Sound.ensure();
+    modeKey = kind; store.set('mode', kind);
+    newRun(kind);
+    state = 'ready';
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    $('lobby').hidden = true; $('results').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
+    $('hRankBox').hidden = kind === 'free';
+    $('hField').textContent = R.rivals.length + 1;
+    bannerQ.length = 0; bannerT = 0; $('banner').hidden = true; $('sprint').hidden = true;
+    bigMsg('Pedal çevir', 'Pedal çevirince geri sayım başlar · ya da Enter', 0);
+  }
+  function beginCount() { state = 'count'; R.countT = 3; R.lastBeep = 0; }
+  function go() {
+    state = 'run'; R.lastY = segAt(START_Z).p1.world.y / UPM;
+    bigMsg('Başla!', '', 0.9); Sound.go();
+  }
+  function finish() {
+    R.finished = true; R.finishT = R.t; R.finalRank = R.rank;
+    state = 'finish'; R.postT = 0;
+    bigMsg(R.finalRank === 1 ? 'Birinci!' : 'Bitiş', R.finalRank === 1 ? '' : R.finalRank + '. sıradasın', 0);
+    Sound.finish();
+  }
+  function pause() { if (state !== 'run') return; state = 'paused'; $('pause').hidden = false; $('pResume').focus(); }
+  function resume() { if (state !== 'paused') return; state = 'run'; $('pause').hidden = true; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+  function showLobby() {
+    journeySave(true);
+    newRun('attract'); state = 'attract';
+    $('lobby').hidden = false; $('hud').hidden = true; $('results').hidden = true; $('pause').hidden = true;
+    renderJourney(); markLobby();
+  }
+  function showResults(early) {
+    journeySave(true);
+    state = 'results';
+    $('pause').hidden = true; $('bigmsg').hidden = true; $('sprint').hidden = true; $('banner').hidden = true; bannerQ.length = 0;
+    const m = MODES[R.kind], t = R.finished ? R.finishT : R.t;
+    const avgRpm = R.moving > 0 ? R.rpmInt / R.moving : 0, avgV = t > 0 ? R.d / t : 0;
+    $('rKind').textContent = m.label + (R.kind === 'free' ? '' : ' · ' + DIFFS[diff].name);
+    let title, note = '';
+    if (R.kind === 'free') title = 'Sürüş bitti';
+    else if (!R.finished) title = 'Yarış yarıda kaldı';
+    else {
+      title = R.finalRank === 1 ? 'Birinci geldin' : R.finalRank + '. oldun';
+      const key = 'best.' + R.kind + '.' + diff, best = store.get(key, 0);
+      if (!best || t < best) { store.set(key, t); note = best ? 'Yeni rekor! Eskisi ' + fmtTime(best) : 'İlk kaydın: ' + fmtTime(t); }
+      else note = 'Rekorun ' + fmtTime(best);
+    }
+    $('rTitle').textContent = title;
+    $('rNote').textContent = note; $('rNote').hidden = !note;
+    const rows = [
+      ['Süre', fmtTime(t), ''], ['Mesafe', fmtKm(R.d), 'km'], ['Ort. hız', fmt1(avgV * 3.6), 'km/sa'],
+      ['Ort. ritim', Math.round(avgRpm), 'rpm'], ['En yüksek', Math.round(R.maxRpm), 'rpm'], ['Tırmanış', Math.round(R.climb), 'm']
+    ];
+    if (R.kind === 'free') rows.push(['Sprint', R.sprints.won + '/' + R.sprints.done, '']);
+    const dl = $('rStats'); dl.textContent = '';
+    for (const [k, v, u] of rows) {
+      const d = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
+      dt.textContent = k; dd.textContent = v;
+      if (u) { const sm = document.createElement('small'); sm.textContent = u; dd.appendChild(sm); }
+      d.append(dt, dd); dl.appendChild(d);
+    }
+    const ol = $('rBoard'); ol.textContent = '';
+    ol.hidden = R.kind === 'free';
+    if (R.kind !== 'free') {
+      const field = R.rivals.map(r => ({ name: r.name, t: r.finishT, d: r.d, col: RIVALS[r.ci].jersey }));
+      field.push({ name: 'Sen', t: R.finished ? R.finishT : 0, d: R.d, col: ME.jersey, me: true });
+      field.sort((a, b) => (a.t && b.t) ? a.t - b.t : a.t ? -1 : b.t ? 1 : b.d - a.d);
+      for (const f of field) {
+        const li = document.createElement('li'), sw = document.createElement('i'), nm = document.createElement('span'), tm = document.createElement('span');
+        if (f.me) li.className = 'me';
+        sw.style.background = f.col; nm.textContent = f.name;
+        tm.textContent = f.t ? fmtTime(f.t) : 'bitişe ' + Math.max(0, Math.round(R.goal - f.d)) + ' m';
+        li.append(sw, nm, tm); ol.appendChild(li);
+      }
+    }
+    $('results').hidden = false; $('rAgain').focus();
+  }
+
+  /* --- banners --- */
+  const bannerQ = []; let bannerT = 0, bigT = 0;
+  function banner(text, tone) { if (bannerQ.length > 2) bannerQ.shift(); bannerQ.push({ text, tone }); }
+  function bannerStep(dt) {
+    const el = $('banner');
+    if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) el.hidden = true; return; }
+    const b = bannerQ.shift(); if (!b) return;
+    el.textContent = b.text; el.dataset.tone = b.tone; el.hidden = false;
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    bannerT = 2.6;
+  }
+  function bigMsg(t, sub, dur) { $('bigT').textContent = t; $('bigS').textContent = sub || ''; $('bigmsg').hidden = false; bigT = dur || 0; }
+
+  /* --- render --- */
+  function project(p, camX, camY, camZ) {
+    const cz = p.world.z - camZ, sc = camDepth / cz;
+    p.camera.z = cz; p.screen.scale = sc;
+    p.screen.x = Math.round(W / 2 - sc * camX * S);
+    p.screen.y = Math.round(HZ - sc * (p.world.y - camY) * S);
+    p.screen.w = Math.round(sc * ROAD * S);
+  }
+  function drawSegment(s) {
+    const a = s.p1.screen, b = s.p2.screen;
+    ctx.fillStyle = s.dark ? PAL.grassA : PAL.grassB; ctx.fillRect(0, b.y, W, a.y - b.y);
+    const sh1 = a.w * 1.16, sh2 = b.w * 1.16;
+    poly(a.x - sh1, a.y, a.x + sh1, a.y, b.x + sh2, b.y, b.x - sh2, b.y, s.dark ? PAL.shoulderA : PAL.shoulderB);
+    poly(a.x - a.w, a.y, a.x + a.w, a.y, b.x + b.w, b.y, b.x - b.w, b.y, s.dark ? PAL.roadA : PAL.roadB);
+    const e1 = a.w * 0.025, e2 = b.w * 0.025, i1 = a.w * 0.92, i2 = b.w * 0.92;
+    poly(a.x - i1 - e1, a.y, a.x - i1, a.y, b.x - i2, b.y, b.x - i2 - e2, b.y, PAL.line);
+    poly(a.x + i1, a.y, a.x + i1 + e1, a.y, b.x + i2 + e2, b.y, b.x + i2, b.y, PAL.line);
+    if (s.dash) poly(a.x - e1 * 0.7, a.y, a.x + e1 * 0.7, a.y, b.x + e2 * 0.7, b.y, b.x - e2 * 0.7, b.y, PAL.line);
+    if (s.haze > 0.01) { ctx.globalAlpha = s.haze; ctx.fillStyle = PAL.haze; ctx.fillRect(0, b.y, W, a.y - b.y); ctx.globalAlpha = 1; }
+  }
+  function drawSprite(img, x, y, w, h, offX, offY, clipY) {
+    x += w * offX; y += h * offY;
+    const clipH = clipY ? Math.max(0, y + h - clipY) : 0;
+    if (clipH < h && w > 0.5) ctx.drawImage(img, 0, 0, img.width, img.height - img.height * clipH / h, x, y, w, h - clipH);
+  }
+  function layer(img, off, y) {
+    const w = img.width, x = -((((off * w) % w) + w) % w);
+    ctx.drawImage(img, x, y); ctx.drawImage(img, x + w, y);
+  }
+  function drawBackground(py) {
+    ctx.fillStyle = bg.sky; ctx.fillRect(0, 0, W, HZ + 1);
+    const sx = W * 0.27, sy = HZ - H * 0.11, sr = H * 0.05;
+    const glow = ctx.createRadialGradient(sx, sy, sr * 0.6, sx, sy, sr * 7);
+    glow.addColorStop(0, 'rgba(255,232,190,.5)'); glow.addColorStop(1, 'rgba(255,232,190,0)');
+    ctx.fillStyle = glow; ctx.fillRect(sx - sr * 7, sy - sr * 7, sr * 14, sr * 14);
+    oval(ctx, sx, sy, sr, sr, PAL.sun);
+    const lift = clamp(py / UPM, -40, 60) * 0.45 * DPR;
+    layer(bg.far, bgOffset * 0.35, HZ - bg.far.height + 2 + lift * 0.4);
+    layer(bg.near, bgOffset * 0.7, HZ - bg.near.height + 2 + lift);
+    ctx.fillStyle = PAL.grassFar; ctx.fillRect(0, HZ, W, H - HZ);
+  }
+  function blitRival(r, x, y, sc, clip) {
+    const fr = RIVAL_FR[r.ci][((Math.floor(((r.phase % 6.2832) + 6.2832) % 6.2832 / 6.2832 * 8)) % 8)];
+    const dw = 82 * sc * S, dh = dw * fr.height / fr.width;
+    if (dh < 2) return;
+    drawSprite(fr, x, y, dw, dh, -0.5, -1, clip);
+    if (dh > 34 * DPR && dh < H * 0.7 && (!clip || y - dh * 0.9 < clip)) {
+      const fs = Math.round(clamp(dh * 0.11, 12 * DPR, 20 * DPR));
+      ctx.font = '700 ' + fs + 'px "Barlow Semi Condensed", sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = fs * 0.22; ctx.strokeStyle = 'rgba(12,14,20,.75)'; ctx.fillStyle = '#f3ead8';
+      ctx.strokeText(r.name, x, y - dh * 1.02); ctx.fillText(r.name, x, y - dh * 1.02);
+    }
+  }
+  function render() {
+    const camZ = R.camZ;
+    ensureTrack(camZ + (DRAW + 5) * SEG);
+    const base = segAt(camZ), basePct = (camZ % SEG) / SEG;
+    const pz = camZ + PLAYER_Z, pSeg = segAt(pz), py = lerp(pSeg.p1.world.y, pSeg.p2.world.y, (pz % SEG) / SEG);
+    const camX = R.px * ROAD, camY = py + CAM_H;
+    drawBackground(py);
+    let maxy = H, x = 0, dx = -(base.curve * basePct);
+    for (let n = 0; n < DRAW; n++) {
+      const s = segments[base.index + n];
+      s.clip = maxy;
+      project(s.p1, camX - x, camY, camZ);
+      project(s.p2, camX - x - dx, camY, camZ);
+      x += dx; dx += s.curve;
+      s.haze = 1 - Math.exp(-Math.pow(n / DRAW, 2) * 3.2);
+      if (s.p1.camera.z <= camDepth || s.p2.screen.y >= s.p1.screen.y || s.p2.screen.y >= maxy) continue;
+      drawSegment(s);
+      maxy = s.p1.screen.y;
+    }
+    for (const s of touched) s.riders.length = 0;
+    touched.length = 0;
+    const near = [];
+    for (const r of R.rivals) {
+      const z = START_Z + r.d * UPM, zc = z - camZ, i = Math.floor(z / SEG), n = i - base.index;
+      if (zc < 80 || n >= DRAW) continue;
+      r.pct = (z % SEG) / SEG;
+      if (zc < PLAYER_Z || n < 1) near.push(r);
+      else { segments[i].riders.push(r); touched.push(segments[i]); }
+    }
+    for (let n = DRAW - 1; n > 0; n--) {
+      const s = segments[base.index + n], a = s.p1.screen;
+      if (s.p1.camera.z <= camDepth) continue;
+      ctx.globalAlpha = 1 - s.haze * 0.85;
+      for (const sp of s.sprites) {
+        const def = sp.def || SPR[sp.k], sc = a.scale;
+        drawSprite(def.c, a.x + sc * sp.o * ROAD * S, a.y, def.w * sc * S, def.h * sc * S, sp.o < 0 ? -1 : sp.o > 0 ? 0 : -0.5, -1, s.clip);
+      }
+      ctx.globalAlpha = 1;
+      for (const r of s.riders) {
+        const b = s.p2.screen, sc = lerp(a.scale, b.scale, r.pct);
+        blitRival(r, lerp(a.x, b.x, r.pct) + sc * r.x * ROAD * S, lerp(a.y, b.y, r.pct), sc, s.clip);
+      }
+    }
+    ctx.globalAlpha = 1;
+    const psc = camDepth / PLAYER_Z;
+    drawRider(ctx, W / 2, HZ + psc * CAM_H * S, psc * UPM * S, R.phase, ME, true);
+    for (const r of near) {
+      const z = START_Z + r.d * UPM, zc = z - camZ, sc = camDepth / zc, s = segAt(z);
+      const y = lerp(s.p1.world.y, s.p2.world.y, (z % SEG) / SEG);
+      blitRival(r, W / 2 + sc * (r.x * ROAD - camX) * S, HZ - sc * (y - camY) * S, sc, 0);
+    }
+  }
+
+  /* --- HUD --- */
+  const cache = {};
+  function setText(id, v) { v = String(v); if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } }
+  function setAttr(id, a, v) { const k = id + '@' + a; v = String(v); if (cache[k] !== v) { cache[k] = v; $(id).setAttribute(a, v); } }
+  function hud() {
+    if (state === 'attract') { setText('liveRpm', Math.round(performance.now() - Input.at < 2500 ? Input.sensor : 0)); return; }
+    if (state === 'results') return;
+    const rpm = Input.shown;
+    setText('hSpeed', Math.round(R.v * 3.6));
+    setText('hRpm', Math.round(rpm));
+    setAttr('gVal', 'stroke-dasharray', (clamp(rpm / 140, 0, 1) * 100).toFixed(1) + ' 100');
+    setAttr('gVal', 'data-z', rpm < 60 ? 'low' : rpm > 100 ? 'hot' : 'ok');
+    if (R.kind === 'free') { setText('hDist', fmtKm(R.d)); setText('hDistLbl', 'km'); }
+    else { setText('hRank', R.rank || R.rivals.length + 1); setText('hDist', fmtKm(Math.min(R.d, R.goal))); setText('hDistLbl', '/ ' + R.goal / 1000 + ' km'); }
+    setText('hTime', fmtTime(R.finished ? R.finishT : R.t));
+    const gp = Math.round(R.grade * 100);
+    setText('hGrade', gp >= 1 ? 'Yokuş %' + gp : gp <= -1 ? 'İniş %' + (-gp) : 'Düz yol');
+    setAttr('hGrade', 'data-t', gp >= 1 ? 'up' : gp <= -1 ? 'down' : '');
+    const fresh = performance.now() - Input.at < 2500;
+    setText('hSrc', fresh ? 'Telefon' + (Input.sensor > 0 ? '' : ' · pedal bekleniyor') : Input.net === 'phone' ? 'Telefon · veri yok' : 'Klavye');
+    setAttr('hSrc', 'data-t', fresh ? 'phone' : '');
+    const sp = R.sprint;
+    $('sprint').hidden = !sp;
+    if (sp) { setText('sprintLbl', 'Sprint ' + sp.target + '+ rpm · ' + Math.ceil(sp.left) + ' sn'); $('sprintFill').style.width = clamp(sp.ok / 10 * 100, 0, 100) + '%'; }
+  }
+
+  /* --- lobby --- */
+  let code = cleanCode(store.get('code', '')) || newCode();
+  store.set('code', code);
+  const NET = {
+    wait: 'Kod hazırlanıyor…', ready: 'Telefon bekleniyor', phone: 'Telefon bağlı',
+    offline: 'İnternete ulaşılamıyor, yeniden deneniyor', nolib: 'Bağlantı kütüphanesi yüklenemedi, sayfayı yenile'
+  };
+  function onNet(s) { Input.net = s; $('netText').textContent = NET[s] || s; $('netDot').dataset.s = s; }
+  function renderPair() {
+    $('code').textContent = code;
+    const url = location.origin + location.pathname + '?k=' + code;
+    $('pairUrl').textContent = url.replace(/^https?:\/\//, '');
+    let svg = '';
+    try { if (window.qrcode) { const q = window.qrcode(0, 'M'); q.addData(url); q.make(); svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } } catch (e) { svg = ''; }
+    $('qr').innerHTML = svg;
+    $('qr').hidden = !svg;
+    const local = location.protocol !== 'https:' || /^(localhost|127\.|\[::1\])/.test(location.hostname);
+    $('localNote').hidden = !local;
+  }
+  function markLobby() {
+    document.querySelectorAll('.mode').forEach(b => b.classList.toggle('sel', b.dataset.mode === modeKey));
+    document.querySelectorAll('#diff button').forEach(b => b.setAttribute('aria-checked', String(+b.dataset.diff === diff)));
+  }
+  function renderJourney() {
+    const total = store.get('journey', 0), lap = Math.floor(total / ROUTE), km = total - lap * ROUTE;
+    const next = STOPS.find(s => s[1] > km + 1e-6);
+    $('jText').textContent = fmt1(km) + ' / ' + ROUTE + ' km' + (next ? ' · sıradaki durak ' + next[0] + ', ' + fmt1(next[1] - km) + ' km' : '') + (lap ? ' · ' + lap + '. tur tamam' : '');
+    $('jFill').style.width = (km / ROUTE * 100).toFixed(2) + '%';
+    const tr = $('jTrack');
+    tr.querySelectorAll('.j-stop').forEach(e => e.remove());
+    for (const [name, k] of STOPS) {
+      const st = document.createElement('span'), em = document.createElement('em');
+      st.className = 'j-stop' + (k <= km ? ' on' : ''); st.style.left = (k / ROUTE * 100) + '%';
+      em.textContent = name; st.appendChild(em); tr.appendChild(st);
+    }
+  }
+
+  document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => pick(b.dataset.mode)));
+  document.querySelectorAll('#diff button').forEach(b => b.addEventListener('click', () => { diff = +b.dataset.diff; store.set('diff', diff); markLobby(); }));
+  $('newCode').addEventListener('click', () => { code = newCode(); store.set('code', code); renderPair(); onNet('wait'); link.restart(); });
+  $('pResume').addEventListener('click', resume);
+  $('pEnd').addEventListener('click', () => showResults(true));
+  $('pMenu').addEventListener('click', showLobby);
+  $('rAgain').addEventListener('click', () => pick(R.kind));
+  $('rMenu').addEventListener('click', showLobby);
+
+  const PEDAL_KEYS = ['ArrowUp', ' ', 'w', 'W'];
+  addEventListener('keydown', e => {
+    Sound.ensure();
+    const inGame = state !== 'attract' && state !== 'results' && state !== 'paused';
+    if (PEDAL_KEYS.includes(e.key) && inGame) { keys.up = true; e.preventDefault(); }
+    if (e.key === 'Shift') keys.fast = true;
+    if (e.repeat) return;
+    if (e.key === 'Escape') {
+      if (state === 'run') pause(); else if (state === 'paused') resume();
+      else if (state === 'ready' || state === 'count' || state === 'results') showLobby();
+    } else if (e.key === 'Enter') {
+      if (state === 'ready') { e.preventDefault(); beginCount(); }
+      else if (state === 'results' && document.activeElement === document.body) pick(R.kind);
+    } else if (e.key === 'm' || e.key === 'M') Sound.toggle();
+    else if (state === 'attract' && ['1', '2', '3'].includes(e.key)) pick(['race3', 'race10', 'free'][+e.key - 1]);
+  });
+  addEventListener('keyup', e => { if (PEDAL_KEYS.includes(e.key)) keys.up = false; if (e.key === 'Shift') keys.fast = false; });
+  addEventListener('blur', () => { keys.up = false; keys.fast = false; });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+  addEventListener('pagehide', () => journeySave(true));
+  addEventListener('resize', resize);
+
+  resize();
+  buildSprites();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => buildSprites());
+  renderPair();
+  const link = hostLink({ code: () => code, newCode() { code = newCode(); store.set('code', code); renderPair(); }, data: onSensor, status: onNet });
+  showLobby();
+
+  function tick(dt) {
+    if (state !== 'paused') update(dt);
+    render(); hud(); bannerStep(dt);
+    if (bigT > 0) { bigT -= dt; if (bigT <= 0) $('bigmsg').hidden = true; }
+  }
+  let last = performance.now();
+  function frame(now) {
+    tick(Math.min(0.05, Math.max(0, (now - last) / 1000))); last = now;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  if (qs.has('debug')) window.pedalDebug = {
+    run(sec, opts) {
+      opts = opts || {};
+      for (let i = 0; i < sec * 30; i++) {
+        if (opts.rpm != null) { Input.sensor = opts.rpm; Input.at = performance.now(); }
+        tick(1 / 30);
+      }
+      return { state, d: Math.round(R.d), kmh: Math.round(R.v * 36) / 10, rank: R.rank, t: Math.round(R.t), grade: Math.round(R.grade * 1000) / 10, banner: $('banner').hidden ? '' : $('banner').textContent };
+    },
+    key(k) { dispatchEvent(new KeyboardEvent('keydown', { key: k })); dispatchEvent(new KeyboardEvent('keyup', { key: k })); }
+  };
+}
+
+if (qs.has('k') || qs.get('m') === 'sensor') startSensor(); else startGame();
+})();
+</script>
+</body>
+</html>
