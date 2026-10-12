@@ -326,12 +326,13 @@ h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: upperc
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/nosleep/0.12.0/NoSleep.min.js"></script>
 <script>
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
-const VERSION = 'v3';
+const VERSION = 'v4';
 const PREFIX = 'pedalyolu-v1-';
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const PeerCtor = window.Peer || (window.peerjs && window.peerjs.Peer) || null;
@@ -537,8 +538,16 @@ function startSensor() {
     $('sJoin').hidden = true; $('sIdle').hidden = false;
     $('sCodeShow').textContent = code;
   }
+  let noSleep = null;
+  function wakeOn() {        // must run inside the tap: iPhone only keeps the screen on after a gesture
+    try {
+      if (!noSleep && window.NoSleep) noSleep = new window.NoSleep();
+      if (noSleep && !noSleep.isEnabled) Promise.resolve(noSleep.enable()).then(() => { $('sWake').hidden = true; }, () => { $('sWake').hidden = false; });
+    } catch (e) { $('sWake').hidden = false; }
+  }
   $('sGo').addEventListener('click', () => {
     $('sErr').hidden = true;
+    wakeOn();
     const DME = window.DeviceMotionEvent;
     if (!sim && DME && typeof DME.requestPermission === 'function') {
       DME.requestPermission()
@@ -566,6 +575,7 @@ function startSensor() {
     clearInterval(loop); clearInterval(simLoop);
     window.removeEventListener('devicemotion', onMotion);
     if (wake) { try { wake.release(); } catch (e) {} wake = null; }
+    if (noSleep) { try { noSleep.disable(); } catch (e) {} }
     if (link) link.send({ r: 0, q: 0, s: '' });
     if (relay) relay.send({ r: 0, q: 0, s: '' });
     $('sRun').hidden = true; $('sIdle').hidden = false;
@@ -620,8 +630,9 @@ function startSensor() {
     $('sDiag').textContent = VERSION + ' · doğrudan: ' + (link ? PS[peerState] || peerState : 'kapalı') + ' · sunucu: ' + (relay ? relay.count() : 0) + '/2 · Mac sinyali: ' + ago;
   }
   async function keepAwake() {
-    if (!('wakeLock' in navigator)) { $('sWake').hidden = false; return; }
-    try { wake = await navigator.wakeLock.request('screen'); $('sWake').hidden = true; } catch (e) { $('sWake').hidden = false; }
+    const covered = () => !!(noSleep && noSleep.isEnabled);
+    if (!('wakeLock' in navigator)) { $('sWake').hidden = covered(); return; }
+    try { wake = await navigator.wakeLock.request('screen'); $('sWake').hidden = true; } catch (e) { $('sWake').hidden = covered(); }
   }
   document.addEventListener('visibilitychange', () => { if (running && document.visibilityState === 'visible') keepAwake(); });
   let holdT = 0; const hb = $('sStop');
@@ -1331,9 +1342,19 @@ function startGame() {
   $('rAgain').addEventListener('click', () => pick(R.kind));
   $('rMenu').addEventListener('click', showLobby);
 
+  /* Keep the Mac display awake: during a ride nobody touches the keyboard */
+  let macWake = null;
+  function macAwake() {
+    if (!('wakeLock' in navigator) || macWake || document.hidden) return;
+    navigator.wakeLock.request('screen').then(l => { macWake = l; l.addEventListener('release', () => { macWake = null; }); }, () => {});
+  }
+  addEventListener('pointerdown', macAwake);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) macAwake(); });
+  macAwake();
+
   const PEDAL_KEYS = ['ArrowUp', ' ', 'w', 'W'];
   addEventListener('keydown', e => {
-    Sound.ensure();
+    Sound.ensure(); macAwake();
     const inGame = state !== 'attract' && state !== 'results' && state !== 'paused';
     if (PEDAL_KEYS.includes(e.key) && inGame) { keys.up = true; e.preventDefault(); }
     if (e.key === 'Shift') keys.fast = true;
