@@ -78,6 +78,7 @@ h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: upperc
 .live { margin-left: auto; color: var(--muted) }
 .live .num { font-size: 30px; color: var(--ink) }
 .warn-note { margin: 12px 0 0; color: var(--rose); font-size: 15px }
+.diag { margin: 10px 0 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums }
 .journey { width: 100%; max-width: 1180px; margin: 28px auto 0; padding-inline: clamp(0px, 3vw, 32px) }
 .j-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font-weight: 600 }
 .j-track { position: relative; height: 6px; border-radius: 3px; background: rgba(243,234,216,.13); margin: 34px 0 30px }
@@ -222,6 +223,7 @@ h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: upperc
       <div class="pair-code"><span class="lbl">Kod</span><b id="code" class="num">·····</b><button id="newCode" class="link" type="button">Yeni kod</button></div>
       <p class="pair-url" id="pairUrl"></p>
       <div class="pair-status"><span class="dot" id="netDot"></span><span id="netText">Bağlanıyor…</span><span class="live"><b id="liveRpm" class="num">0</b> rpm</span></div>
+      <p class="diag" id="diag"></p>
       <p class="warn-note" id="localNote" hidden>Bu kopya bilgisayardan yerel açılmış. Telefonun bağlanabilmesi için sayfayı internet (https) adresinden aç.</p>
     </aside>
   </div>
@@ -291,7 +293,7 @@ h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: upperc
 
 <section id="sensor" class="screen" hidden>
   <div class="s-wrap">
-    <header class="s-head"><b>Pedal Yolu</b><span>telefon sensörü</span></header>
+    <header class="s-head"><b>Pedal Yolu</b><span id="sVer">telefon sensörü</span></header>
     <form id="sJoin" class="s-panel" hidden>
       <label for="sCode">Mac ekranındaki kodu yaz</label>
       <input id="sCode" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8">
@@ -313,6 +315,7 @@ h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: upperc
       <div class="lbl">rpm</div>
       <p class="s-line" id="sNet">Bağlanıyor…</p>
       <p class="s-line dim" id="sSig">Pedal bekleniyor</p>
+      <p class="s-line dim diag" id="sDiag"></p>
       <p class="s-line dim" id="sWake" hidden>Ekran kapanırsa sayım durur. Telefonun otomatik kilidini geçici olarak kapat.</p>
       <div class="sim" id="sSim" hidden><label for="sSimR">Sanal pedal: <b id="sSimV">80</b> rpm</label><input type="range" id="sSimR" min="0" max="130" value="80"></div>
       <button id="sStop" class="hold" type="button"><i></i><span>Durdurmak için basılı tut</span></button>
@@ -328,6 +331,7 @@ h1 { font: 600 clamp(84px, 12vw, 164px)/.78 var(--f-num); text-transform: upperc
 'use strict';
 const $ = id => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
+const VERSION = 'v3';
 const PREFIX = 'pedalyolu-v1-';
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const PeerCtor = window.Peer || (window.peerjs && window.peerjs.Peer) || null;
@@ -481,7 +485,7 @@ function joinLink(code, h) {
    (browser privacy settings, NAT). The phone publishes rpm, the Mac publishes a heartbeat. */
 const MQTT_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
 function relayLink(getCode, role, h) {
-  if (!window.mqtt || qs.has('norelay')) return { send() {}, connected: () => false, retopic() {} };
+  if (!window.mqtt || qs.has('norelay')) return { send() {}, connected: () => false, count: () => 0, retopic() {} };
   const base = c => 'pedalyolu/v1/' + c;
   const inTopic = role === 'host' ? '/rpm' : '/host', outTopic = role === 'host' ? '/host' : '/rpm';
   let cur = getCode();
@@ -501,6 +505,7 @@ function relayLink(getCode, role, h) {
   return {
     send(obj) { const s = JSON.stringify(obj); for (const c of clients) if (c.connected) c.publish(base(cur) + outTopic, s, { qos: 0 }); },
     connected: () => clients.some(c => c.connected),
+    count: () => clients.filter(c => c.connected).length,
     retopic() {
       const old = cur; cur = getCode(); if (old === cur) return;
       for (const c of clients) if (c.connected) { c.unsubscribe(base(old) + inTopic); c.subscribe(base(cur) + inTopic, { qos: 0 }); }
@@ -513,6 +518,7 @@ function startSensor() {
   document.body.classList.add('is-sensor');
   $('view').hidden = true;
   $('sensor').hidden = false;
+  $('sVer').textContent = 'telefon sensörü · ' + VERSION;
   const sim = qs.has('sim');
   let code = cleanCode(qs.get('k'));
   let link = null, running = false, seen = 0, wake = null, loop = 0, simLoop = 0, simRpm = 80, simPh = 0, simLast = 0;
@@ -609,6 +615,9 @@ function startSensor() {
     if (s === 'nolib' && relay && relay.connected()) s = 'connecting';
     const [t, c] = NET[s] || NET.connecting, el = $('sNet');
     if (el.textContent !== t) { el.textContent = t; el.className = 's-line ' + c; }
+    const PS = { connecting: 'bağlanıyor', ok: 'bağlı', nogame: 'Mac yok', lost: 'koptu', offline: 'internet yok', nolib: 'yüklenemedi' };
+    const ago = lastHost ? Math.round((Date.now() - lastHost) / 1000) + ' sn önce' : 'yok';
+    $('sDiag').textContent = VERSION + ' · doğrudan: ' + (link ? PS[peerState] || peerState : 'kapalı') + ' · sunucu: ' + (relay ? relay.count() : 0) + '/2 · Mac sinyali: ' + ago;
   }
   async function keepAwake() {
     if (!('wakeLock' in navigator)) { $('sWake').hidden = false; return; }
@@ -1280,13 +1289,16 @@ function startGame() {
     let s = performance.now() - Input.at < 3000 || Input.net === 'phone' ? 'phone' : Input.net;
     if (s !== 'phone' && relay.connected()) s = 'ready';
     setText('netText', NET[s] || s); setAttr('netDot', 'data-s', s);
+    const PN = { wait: 'bekliyor', ready: 'hazır', phone: 'bağlı', offline: 'yok', nolib: 'yüklenemedi' };
+    const ago = Input.at ? Math.round((performance.now() - Input.at) / 1000) + ' sn önce' : 'yok';
+    setText('diag', 'Sürüm ' + VERSION + ' · sunucu ' + relay.count() + '/2 · doğrudan ' + (PN[Input.net] || Input.net) + ' · son telefon verisi ' + ago);
   }
   function renderPair() {
     $('code').textContent = code;
     const url = location.origin + location.pathname + '?k=' + code;
     $('pairUrl').textContent = url.replace(/^https?:\/\//, '');
     let svg = '';
-    try { if (window.qrcode) { const q = window.qrcode(0, 'M'); q.addData(url); q.make(); svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } } catch (e) { svg = ''; }
+    try { if (window.qrcode) { const q = window.qrcode(0, 'M'); q.addData(url + '&v=' + VERSION); q.make(); svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } } catch (e) { svg = ''; }
     $('qr').innerHTML = svg;
     $('qr').hidden = !svg;
     const local = location.protocol !== 'https:' || /^(localhost|127\.|\[::1\])/.test(location.hostname);
